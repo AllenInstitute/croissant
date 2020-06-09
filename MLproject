@@ -1,6 +1,6 @@
 name: croissant
 
-conda_env: croissant_env.yaml
+conda_env: conda.yaml
 
 entry_points:
   main:
