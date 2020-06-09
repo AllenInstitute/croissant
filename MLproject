@@ -1,0 +1,9 @@
+name: croissant
+
+conda_env: croissant_env.yaml
+
+entry_points:
+  main:
+    parameters:
+      message: {type: str, default: "Hello World"}
+    command: "python example.py {message}"
