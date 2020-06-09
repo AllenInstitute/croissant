@@ -1,0 +1,7 @@
+name: croissant
+channels:
+  - defaults
+dependencies:
+  - pip
+  - pip:
+      - mlflow
