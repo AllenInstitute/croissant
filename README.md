@@ -1,4 +1,5 @@
 [![CircleCI](https://circleci.com/gh/AllenInstitute/croissant.svg?style=svg)](https://circleci.com/gh/AllenInstitute/croissant)
+[![codecov](https://codecov.io/gh/AllenInstitute/croissant/branch/master/graph/badge.svg)](https://codecov.io/gh/AllenInstitute/croissant)
 
 # croissant
 The goal of this repo is to create the infrastructure capable of

@@ -9,7 +9,8 @@ jobs:
       - run:
           command: |
             # pytest would be a dep in requirements.txt
-            python -m pytest
+            python -m pytest --cov croissant --cov-report xml
+            bash <(curl -s https://codecov.io/bash) -t ${CODECOV_TOKEN}
           name: Test
   lint:
     executor: python/default
