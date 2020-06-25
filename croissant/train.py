@@ -104,14 +104,7 @@ def train_classifier(environment: str, training_data: Path, output_dir: Path,
                           scoring=scorers, cv=k_folds,
                           refit='AUC')
         fitted_model = gs.fit(features, labels)
-        score_stat_dict = {}
-        for score_key in scorers.keys():
-            score_stat_dict[f'Mean {score_key}'] = gs.cv_results_[
-                f'mean_test_{score_key}']
-            score_stat_dict[f'Std {score_key}'] = gs.cv_results_[
-                f'std_test_{score_key}']
-        score_stat_dict['Params'] = gs.cv_results_['params']
-        score_stat_frame = pd.DataFrame.from_dict(score_stat_dict)
+        cv_results_frame = pd.DataFrame.from_dict(gs.cv_results_)
 
         logger.info(
             f"Model fitted, the best score is {fitted_model.best_score_} "
@@ -124,9 +117,9 @@ def train_classifier(environment: str, training_data: Path, output_dir: Path,
         mlflow.log_metric('Best_Score', fitted_model.best_score_)
         for score_key, score_id in scorers.items():
             mlflow.log_metric(f'Mean_{score_key}',
-                              score_stat_frame[f'Mean {score_key}'].max())
+                              cv_results_frame[f'mean_test_{score_key}'].max())
             mlflow.log_metric(f'STD_{score_key}',
-                              score_stat_frame[f'Std {score_key}'].max())
+                              cv_results_frame[f'std_test_{score_key}'].max())
 
         # log and save fitted model
         logger.info("Logging and Saving Fitted Model")
