@@ -6,3 +6,4 @@ numpy
 scipy
 boto3
 moto
+jsonlines

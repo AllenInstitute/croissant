@@ -1,7 +1,11 @@
 import pytest
 import pandas as pd
+from moto import mock_s3
+import boto3
+import jsonlines
 
-from croissant.ingest import parse_annotation, annotation_df_from_file
+from croissant.ingest import (
+    parse_annotation, annotation_df_from_file, _read_jsonlines)
 
 
 record_no_worker = {
@@ -107,9 +111,51 @@ def test_annotation_df_from_file(monkeypatch, tmp_path, records,
     """Testing additional keys behavior, file loading and parser
     already unit tested.
     """
-    monkeypatch.setattr("croissant.ingest.read_jsonlines", lambda x: x)
+    monkeypatch.setattr("croissant.ingest._read_jsonlines",
+                        lambda x: jsonlines.Reader(records, loads=lambda y: y))
     actual = annotation_df_from_file(
         records, "project", "label",
         annotations_key=None, min_annotations=1, on_missing="skip",
         additional_keys=additional_keys)
     pd.testing.assert_frame_equal(actual, expected, check_like=True)
+
+
+@pytest.mark.parametrize(
+    "body, expected",
+    [
+        (b'{"a": 1, "b": 3}\n{"b": 2}', [{"a": 1, "b": 3}, {"b": 2}]),
+        (b'{"a": 1}', [{"a": 1}]),
+        (b'', []),
+    ]
+)
+def test_read_jsonlines_file(tmp_path, body, expected):
+    with open(tmp_path / "filename", "wb") as f:
+        f.write(body)
+    reader = _read_jsonlines(tmp_path / "filename")
+    response = []
+    for record in reader:
+        response.append(record)
+    reader.close()
+    assert expected == response
+
+
+@mock_s3
+@pytest.mark.parametrize(
+    "body, expected",
+    [
+        (b'{"a": 1, "b": 3}\n{"b": 2}', [{"a": 1, "b": 3}, {"b": 2}]),
+        (b'{"a": 1}', [{"a": 1}]),
+        (b'', []),
+    ]
+)
+def test_read_jsonlines_s3(body, expected):
+    s3 = boto3.client("s3")
+    s3.create_bucket(Bucket="mybucket")
+    s3.put_object(Bucket="mybucket", Key="my/file.json",
+                  Body=body)
+    reader = _read_jsonlines("s3://mybucket/my/file.json")
+    response = []
+    for record in reader:
+        response.append(record)
+    reader.close()
+    assert expected == response

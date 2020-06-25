@@ -1,26 +1,9 @@
 """Miscellaneous utility functions that don't quite belong elsewhere."""
-from typing import Any, Union, BinaryIO
+from typing import Any
 from functools import reduce
 import operator
-from pathlib import Path
-import json
 import boto3
 from urllib.parse import urlparse
-
-
-def read_jsonlines(f: Union[Path, BinaryIO]) -> list:
-    """
-    Parse a jsonlines file from path, bytes, or from file-object (bytes)
-    and load as a list of json objects
-    """
-    if isinstance(f, (str, Path)):
-        with open(f, "r") as f_:
-            data = f_.readlines()
-    elif isinstance(f, bytes):
-        data = f.splitlines()
-    else:
-        data = f.readlines()
-    return list(map(json.loads, data))
 
 
 def nested_get_item(obj: dict, key_list: list) -> Any:
@@ -40,8 +23,6 @@ def nested_get_item(obj: dict, key_list: list) -> Any:
     key_list: list
         List of keys, in order, to traverse through the nested dict
         and return a value.
-    value: Optional[Any]
-        Default value to return. Defaults to None.
     Raises
     ======
     KeyError if any key from `key_list` is not present in `obj`

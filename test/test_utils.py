@@ -3,7 +3,7 @@ import boto3
 from moto import mock_s3
 from botocore.exceptions import ClientError
 
-from croissant.utils import nested_get_item, read_jsonlines, s3_get_object
+from croissant.utils import nested_get_item, s3_get_object
 
 
 @pytest.mark.parametrize(
@@ -44,31 +44,6 @@ def test_nested_get_item_fails_if_missing_key(d, keys):
 def test_nested_get_item_fails_with_empty_list(d, keys):
     with pytest.raises(ValueError):
         nested_get_item(d, keys)
-
-
-@pytest.mark.parametrize(
-    "file_type", ["path", "binaryio", "bytes"]
-)
-@pytest.mark.parametrize(
-    "data, expected",
-    [
-        (b'{"a": 123, "b": "ijk"}\n{"a": 999, "b": "lop"}',
-         [{"a": 123, "b": "ijk"}, {"a": 999, "b": "lop"}],),
-        (b'{"a": 123, "b": "ijk"}', [{"a": 123, "b": "ijk"}],),
-        (b'', []),
-    ]
-)
-def test_read_jsonlines(tmp_path, file_type, data, expected):
-    if file_type == "bytes":
-        assert expected == read_jsonlines(data)
-    else:
-        with open(tmp_path / "filename", "wb") as f:
-            f.write(data)
-        if file_type == "path":
-            assert expected == read_jsonlines(tmp_path / "filename")
-        else:
-            with open(tmp_path / "filename", "r") as f:
-                assert expected == read_jsonlines(f)
 
 
 @mock_s3

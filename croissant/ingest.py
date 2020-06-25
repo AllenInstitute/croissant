@@ -2,9 +2,23 @@ from typing import Optional, Any, Union, List, Tuple
 from pathlib import Path
 import pandas as pd
 from functools import partial
+import jsonlines
 
-from croissant.utils import (
-    read_jsonlines, s3_get_object, nested_get_item)
+from croissant.utils import s3_get_object, nested_get_item
+
+
+def _read_jsonlines(uri: Union[str, Path]) -> jsonlines.Reader:
+    """
+    Helper function to load jsonlines file from either s3 or a local
+    file, given a uri (s3 uri or local filepath).
+    """
+    if str(uri).startswith("s3://"):
+        data = s3_get_object(uri)["Body"].iter_lines(chunk_size=8192)    # The lines can be big        # noqa
+        reader = jsonlines.Reader(data)
+    else:
+        data = open(uri, "rb")
+        reader = jsonlines.Reader(data)
+    return reader
 
 
 def annotation_df_from_file(
@@ -57,25 +71,25 @@ def annotation_df_from_file(
         croissant.utils.nested_get_item. If the key is top-level, pass
         it as a 1-tuple.
     """
-    if str(filepath).startswith("s3://"):
-        data = s3_get_object(filepath)["Body"].read()
-        annotations = read_jsonlines(data)
-    else:
-        annotations = read_jsonlines(filepath)
+    reader = _read_jsonlines(filepath)
     parser = partial(parse_annotation, project_key=project_key,
                      label_key=label_key, annotations_key=annotations_key,
                      min_annotations=min_annotations, on_missing=on_missing)
-    labels = {label_key: list(map(parser, annotations))}
+    labels = {label_key: []}
     if additional_keys:
         getters = []
-        # Get all keys so only traverse data once for all additional keys
+        # Get all keys so only traverse data once
         for keypath in additional_keys:
             labels.update({keypath[-1]: []})
             getters.append((keypath[-1], partial(nested_get_item,
                                                  key_list=keypath)))
-        for annotation in annotations:
+        for record in reader:
             for getter in getters:
-                labels[getter[0]].append(getter[1](annotation))
+                labels[getter[0]].append(getter[1](record))
+            labels[label_key].append(parser(record))
+    else:
+        labels = {label_key: list(map(parser, reader))}
+    reader.close()
     return pd.DataFrame(labels)
 
 
