@@ -3,13 +3,13 @@ import json
 import logging
 
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import (KFold, GridSearchCV)
+from sklearn.model_selection import KFold, GridSearchCV
 import pandas as pd
 import mlflow
 import mlflow.sklearn
 import argschema
 
-from croissant.schemas import (TrainingSchema)
+from croissant.schemas import TrainingSchema
 from croissant.features import (Roi, RoiMetadata, FeatureExtractor,
                                 feature_pipeline)
 
