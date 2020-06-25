@@ -134,14 +134,14 @@ class ClassifierTrainer(argschema.ArgSchemaParser):
     def train(self):
 
         # set up logger
-        logger.setLevel(self.args.pop('log_level'))
+        logger.setLevel(self.args['log_level'])
 
         # prepare args for handoff
         self.args['training_data'] = Path(self.args['training_data'])
         self.args['output_dir'] = Path(self.args['output_dir'])
 
         # Parse the search grid
-        search_grid_path = self.args.pop('search_grid_path')
+        search_grid_path = self.args['search_grid_path']
         if search_grid_path:
             with open(search_grid_path) as open_grid:
                 search_grid = json.load(open_grid)
@@ -149,8 +149,8 @@ class ClassifierTrainer(argschema.ArgSchemaParser):
             search_grid = {'model__l1_ratio': [0.25, 0.5, 0.75]}
 
         # Set up mlflow tracking
-        mlflow_tracking_uri = self.args.pop('mlflow_tracking_uri')
-        experiment_name = self.args.pop('experiment_name')
+        mlflow_tracking_uri = self.args['mlflow_tracking_uri']
+        experiment_name = self.args['experiment_name']
         mlflow.set_tracking_uri(mlflow_tracking_uri)
         mlflow.set_experiment(experiment_name)
 
