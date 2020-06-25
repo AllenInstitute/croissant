@@ -1,5 +1,4 @@
 from pathlib import Path
-import os
 import json
 import logging
 
@@ -86,13 +85,6 @@ def train_classifier(environment: str, training_data: Path, output_dir: Path,
                                     dff_traces=dff_traces,
                                     metadata=metadatas).run()
         logger.info('Feature extraction complete!')
-
-        logger.info('Logging features to tracker!')
-        feature_path = output_dir / 'Features.h5'
-        features.to_hdf(feature_path, key="Features", mode='w')
-        mlflow.log_artifact(feature_path)
-        if not environment == 'dev':
-            os.remove(feature_path)
 
         # Fitting model
         logger.info('Fitting model to data!')

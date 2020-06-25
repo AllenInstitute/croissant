@@ -46,11 +46,7 @@ def test_train_classifier(environment, experiment_name,
         run_dir = [artifact_path / path for path in os.listdir(artifact_path)
                    if os.path.isdir(artifact_path / path)][0]
 
-        # verify the artifacts exist
         artifacts_dir = run_dir / 'artifacts'
-        expected_files = [artifacts_dir / 'Features.h5']
-        for expected_file in expected_files:
-            assert expected_file.exists()
 
         # verify the model exists
         model_dir = artifacts_dir / 'FittedModel'
