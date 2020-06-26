@@ -34,7 +34,7 @@ def test_train_classifier(experiment_name,
         mlflow.set_tracking_uri(temp_uri)
         mlflow.set_experiment(experiment_name)
 
-        train_classifier(training_data=data_paths[0],
+        train_classifier(training_data_path=data_paths[0],
                          output_dir=Path(temp_out_dir),
                          search_grid=search_grid)
 
