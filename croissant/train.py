@@ -11,8 +11,8 @@ import argschema
 from typing import Dict, Any
 
 from croissant.schemas import TrainingSchema
-from croissant.features import (Roi, RoiMetadata, FeatureExtractor,
-                                feature_pipeline)
+from croissant.roi import RoiWithMetadata
+from croissant.features import FeatureExtractor, feature_pipeline
 
 
 logger = logging.getLogger('TrainClassifier')
@@ -58,19 +58,12 @@ def train_classifier(training_data: Path, output_dir: Path,
         # extract data
         logger.info("Extracting ROI data from manifest data")
         for roi_data in training_data_loaded:
-            dff_traces.append(roi_data['trace'])
-            roi = Roi(roi_id=roi_data['roi_id'], coo_cols=roi_data['coo_cols'],
-                      coo_rows=roi_data['coo_rows'],
-                      coo_data=roi_data['coo_data'],
-                      image_shape=roi_data['image_shape'])
-            roi_meta = RoiMetadata(depth=roi_data['depth'],
-                                   full_genotype=roi_data['full_genotype'],
-                                   targeted_structure=roi_data['targeted_'
-                                                               'structure'],
-                                   rig=roi_data['rig'])
-            labels.append(roi_data['label'])
-            rois.append(roi)
-            metadatas.append(roi_meta)
+            myroi = RoiWithMetadata.from_dict(roi_data)
+            dff_traces.append(myroi.trace)
+            rois.append(myroi.roi)
+            metadatas.append(myroi.roi_meta)
+            labels.append(myroi.label)
+
         logger.info("Extracted all ROI data and formatted for feature "
                     "extraction.")
 

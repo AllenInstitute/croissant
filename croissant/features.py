@@ -1,4 +1,4 @@
-from typing import Union, TypedDict, Optional, List, Tuple
+from typing import Union, List
 
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
@@ -8,25 +8,7 @@ from scipy.stats import skew
 import numpy as np
 import pandas as pd
 
-
-class Roi(TypedDict):
-    """ROI mask image data.
-    """
-    roi_id: Optional[int]
-    # Data for reconstructing mask on image planes
-    coo_rows: List[int]
-    coo_cols: List[int]
-    coo_data: List[float]
-    image_shape: Tuple[int, int]
-
-
-class RoiMetadata(TypedDict):
-    """Metadata associated experiments from which ROIs were extracted.
-    """
-    depth: int        # Microscope imaging depth
-    full_genotype: str             # Mouse CRE line
-    targeted_structure: str          # Targeted brain area (imaging)
-    rig: str                  # Name of imaging rig
+from croissant.roi import Roi, RoiMetadata
 
 
 class FeatureExtractor:
