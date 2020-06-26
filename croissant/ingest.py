@@ -2,6 +2,7 @@ from typing import Optional, Any, Union, List, Tuple
 from pathlib import Path
 import pandas as pd
 from functools import partial
+import argparse
 import jsonlines
 
 from croissant.utils import s3_get_object, nested_get_item
@@ -157,3 +158,129 @@ def parse_annotation(record: dict,
             else:
                 return None
     return label
+
+
+def _ingest_uri(
+        filepath: Union[str, Path],
+        project_key: str,
+        label_key: str,
+        roi_id_key: Optional[Tuple[str]] = None,
+        annotations_key: Optional[Tuple[str]] = None,
+        min_annotations: int = 1,
+        on_missing: str = "skip",
+        drop_na: bool = False) -> pd.DataFrame:
+    """Main entry for processing the data. See
+    `croissant.ingest.annotation_df_from_file` for most function
+    parameters.
+
+    Parameters
+    ==========
+    filepath: str
+    project_key: str
+    label_key: str
+    annotations_key: Optional[Tuple[str]]
+        Key path to annotations key. Should be in the top level of the
+        project_key dictionary.
+    roi_id_key: Optional[str]
+        Top-level key for ROI id in the json record
+    min_annotations: str
+    on_missing: str
+    drop_na: bool (default=False)
+        Whether to drop labels that have null values in the output.
+
+    Returns
+    =======
+    pd.DataFrame of the following format:
+        label: int
+            Column of labels. 0 if "not cell", 1 if "cell".
+        roi_id: int (if `roi_id_key` is passed)
+            The ROI's id.
+        annotations: List[int] (if `annotations_key` is passed)
+            List of annotations from workers. 0 if "not cell", 1 if
+            "cell".
+    """
+    return_cols = ["label"]
+    additional_keys = []
+    if roi_id_key:
+        roi_out_key = roi_id_key[-1]        # Need the lowest level key if exists for output   # noqa
+        additional_keys.append(roi_id_key)
+        return_cols.append("roi_id")
+    annot_out_key = None
+    if annotations_key:
+        annot_out_key = annotations_key[-1]     # Need the lowest level key if exists for parse_annotations_df      # noqa
+        additional_keys.append(annotations_key)
+        return_cols.append("annotations")
+
+    output = annotation_df_from_file(
+        filepath, project_key, label_key, annot_out_key,
+        min_annotations, on_missing, additional_keys)
+    output["label"] = output[label_key].map({"cell": 1, "not cell": 0})
+    if annot_out_key:         # Map the annotations same way as labels
+        output["annotations"] = output[annotations_key[-1]].apply(
+            lambda annotations: [1 if annot["roiLabel"] == "cell" else 0
+                                 for annot in annotations])
+    if roi_id_key:
+        output.rename(columns={roi_out_key: "roi_id"}, inplace=True)
+    if drop_na:
+        output.dropna(subset=["label"], inplace=True)
+    return output[return_cols]
+
+
+def _keypath(s):
+    """Parser for keypath from command line args."""
+    return tuple(s.split(","))
+
+
+def _make_parser():
+    """ Make the command line argument parser when module is run as main.
+    Split out for easier testing.
+    """
+    parser = argparse.ArgumentParser("annotationIngest")
+    parser.add_argument(
+        "manifest_uri", type=str,
+        help=("S3 URI or local filepath to the output manifest file of a "
+              "SageMaker GT job, in jsonlines format."))
+    parser.add_argument(
+        "output_csv", type=str,
+        help="s3 URI or local filepath to save the results (csv format).")
+    parser.add_argument(
+        "project_key", type=str,
+        help="Top-level key for the output manifest data")
+    parser.add_argument(
+        "label_key", type=str,
+        help=("Key for the label data in each output manifest "
+              " record[project_key]."))
+    parser.add_argument(
+        "--min_annotations", type=int, default=1,
+        help="Optional required number of annotations to enforce per record.")
+    parser.add_argument(
+        "--on_missing", type=str, default="skip", choices=["skip", "error"],
+        help=("What do to if required number of annotations is not met. "
+              "if 'skip', replace the label with null. If error, will raise "
+              "an error instead."))
+    parser.add_argument(
+        "--roi_id_key", type=_keypath, default=None,
+        help=("comma-separated 'key path' to ROI id in the manifest records. "
+              "Example: `--roi_id_key project,roi-id` will access "
+              "record['project']['roi-id']"))
+    parser.add_argument(
+        "--annotations_key", type=_keypath, default=None,
+        help=("Comma-separated 'key path' to worker annotations list in the "
+              "manifest records. The worker annotations must be a list where "
+              "each element is a dictionary record with the following format "
+              ": {'workerId': <string>, 'roiLabel': <string> }"))
+    parser.add_argument(
+        "--drop_na", action="store_true", default=False,
+        help=("Flag to drop records with null labels in the output data."))
+    return parser
+
+
+if __name__ == "__main__":
+    parser = _make_parser()
+    args = parser.parse_args()
+    output = _ingest_uri(
+        args.manifest_uri, args.project_key, args.label_key,
+        roi_id_key=args.roi_id_key, annotations_key=args.annotations_key,
+        min_annotations=args.min_annotations, on_missing=args.on_missing,
+        drop_na=args.drop_na)
+    output.to_csv(args.output_csv)    # will use s3fs if s3 uri is passed

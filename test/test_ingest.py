@@ -3,58 +3,40 @@ import pandas as pd
 from moto import mock_s3
 import boto3
 import jsonlines
+import numpy as np
 
 from croissant.ingest import (
-    parse_annotation, annotation_df_from_file, _read_jsonlines)
+    parse_annotation, annotation_df_from_file, _read_jsonlines,
+    _ingest_uri, _keypath)
 
 
-record_no_worker = {
-    "experiment-id": 000,
-    "roi-id": 111,
-    "source-ref": "s3://bucket/input.png",
-    "another-source-ref": "s3://bucket/input_1.png",
-    "project": {
-        "sourceData": "s3://bucket/input.png",
-        "label": 0,
-    },
-    "2-line-2-project-metadata": {
-        "type": "groundtruth/custom",
-        "job-name": "cool-job",
-        "human-annotated": "yes",
-        "creation-date": "2020-06-11T00:54:41.833000"
+def generate_record(experiment_id, roi_id, label, annotation_labels=None):
+    record = {
+        "experiment-id": experiment_id,
+        "roi-id": roi_id,
+        "source-ref": "s3://bucket/input.png",
+        "another-source-ref": "s3://bucket/input_1.png",
+        "project": {
+            "sourceData": "s3://bucket/input.png",
+            "label": label,
+        },
+        "2-line-2-project-metadata": {
+            "type": "groundtruth/custom",
+            "job-name": "cool-job",
+            "human-annotated": "yes",
+            "creation-date": "2020-06-11T00:54:41.833000"
+        }
     }
-}
+    if annotation_labels:
+        worker_annotations = [{"workerId": "private-id", "roiLabel": annot}
+                              for annot in annotation_labels]
+        record["project"]["workerAnnotations"] = worker_annotations
+    return record
 
-record_3_worker = {
-    "experiment-id": 867,
-    "roi-id": 5309,
-    "source-ref": "s3://bucket/input.png",
-    "another-source-ref": "s3://bucket/input_1.png",
-    "project": {
-        "sourceData": "s3://bucket/input.png",
-        "label": "not cell",
-        "workerAnnotations": [
-            {
-                "workerId": "private.us-west-2.aa",
-                "roiLabel": "not cell"
-            },
-            {
-                "workerId": "private.us-west-2.bb",
-                "roiLabel": "cell"
-            },
-            {
-                "workerId": "private.us-west-2.cc",
-                "roiLabel": "not cell"
-            }
-        ]
-    },
-    "2-line-2-project-metadata": {
-        "type": "groundtruth/custom",
-        "job-name": "cool-job",
-        "human-annotated": "yes",
-        "creation-date": "2020-06-11T00:54:41.833000"
-    }
-}
+
+record_3_worker = generate_record(867, 5309, "not cell",
+                                  ["cell", "not cell", "not cell"])
+record_no_worker = generate_record(000, 111, 0)
 
 
 @pytest.mark.parametrize(
@@ -159,3 +141,57 @@ def test_read_jsonlines_s3(body, expected):
         response.append(record)
     reader.close()
     assert expected == response
+
+
+@pytest.mark.parametrize(
+    "keys, expected", [
+        ("key1,key2", ("key1", "key2")),
+        ("key1", ("key1",)),
+    ]
+)
+def test_keypath(keys, expected):
+    """Test that keypaths are parsed correctly from args"""
+    assert expected == _keypath(keys)
+
+
+@pytest.mark.parametrize(
+    "roi_id_key, annotations_key, min_annotations, drop_na, expected",
+    [
+        (
+            ("roi-id",), ("project", "workerAnnotations"), 3, False,
+            pd.DataFrame(
+                {"label": [1, 0], "roi_id": [456, 888],
+                 "annotations": [[1, 0, 1], [0, 0, 0, 0]]})
+        ),
+        (   # Don't include additional keys
+            None, None, 1, False,
+            pd.DataFrame({"label": [1, 0]})
+        ),
+        (   # Bad data, but don't drop
+            ("roi-id",), ("project", "workerAnnotations"), 4, False,
+            pd.DataFrame(
+                {"label": [np.NaN, 0], "roi_id": [456, 888],
+                 "annotations": [[1, 0, 1], [0, 0, 0, 0]]})
+        ),
+        (   # Bad data, do drop
+            ("roi-id",), ("project", "workerAnnotations"), 4, True,
+            pd.DataFrame(
+                {"label": [0], "roi_id": [888],
+                 "annotations": [[0, 0, 0, 0]]}, index=[1])
+        ),
+    ]
+)
+def test_ingest_uri(monkeypatch, roi_id_key, annotations_key, min_annotations,
+                    drop_na, expected):
+    """Test the main module runner."""
+    records = [
+        generate_record(123, 456, "cell", ["cell", "not cell", "cell"]),
+        generate_record(999, 888, "not cell",
+                        ["not cell", "not cell", "not cell", "not cell"])]
+    monkeypatch.setattr("croissant.ingest._read_jsonlines",
+                        lambda x: jsonlines.Reader(records, loads=lambda y: y))
+    actual = _ingest_uri(
+        records, "project", "label", roi_id_key, annotations_key,
+        min_annotations, "skip", drop_na)
+    pd.testing.assert_frame_equal(expected, actual, check_like=True,
+                                  check_dtype=False)

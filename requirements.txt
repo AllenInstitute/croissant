@@ -7,3 +7,4 @@ scipy
 boto3
 moto
 jsonlines
+s3fs
