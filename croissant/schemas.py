@@ -47,4 +47,5 @@ class TrainingSchema(argschema.ArgSchema):
         required=False,
         allow_none=True,
         default=None,
-        description=("Tracking URI for mlflow"))
+        description=("passed to mlflow.set_tracking_uri(). If None mlflow "
+                     "sets to./mlruns"))
