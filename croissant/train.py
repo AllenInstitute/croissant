@@ -19,18 +19,14 @@ logger = logging.getLogger('TrainClassifier')
 
 def train_classifier(environment: str, training_data: Path, output_dir: Path,
                      search_grid: dict):
-    """
-    Trains a classifier using the provided parameters defined by the user.
-    The classifier takes ROI data as input and transform it into features
-    that are then trained upon to fit data to model. Cross validation is
-    performed according to k fold validation with 5 folds Tags, artifacts,
-    metrics, and generated model are logged via MlFlow.
+    """Performs k-fold cross-validated grid search logistic regression and 
+    logs to mlflow.
+
     Parameters
     ----------
     environment: str
-        Dev, Test, Production - indicates where the training is being run.
-        Dev will keep output files in specified output directory while Test
-        and Production will remove these.
+        `dev` or `production`. `dev` will keep output files in specified 
+        output directory while `production` will remove these.
     training_data: Path
         The path to the ROIs stored in json format for the classifier to train
         against
