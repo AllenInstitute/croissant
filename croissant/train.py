@@ -8,6 +8,7 @@ import pandas as pd
 import mlflow
 import mlflow.sklearn
 import argschema
+from typing import Dict, Any
 
 from croissant.schemas import TrainingSchema
 from croissant.features import (Roi, RoiMetadata, FeatureExtractor,
@@ -18,7 +19,7 @@ logger = logging.getLogger('TrainClassifier')
 
 
 def train_classifier(training_data: Path, output_dir: Path,
-                     search_grid: dict):
+                     search_grid: Dict[str, Any]):
     """Performs k-fold cross-validated grid search logistic regression and
     logs to mlflow.
 
