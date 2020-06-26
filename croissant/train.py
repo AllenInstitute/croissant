@@ -94,21 +94,20 @@ def train_classifier(training_data: Path, output_dir: Path,
                     "on the specified parameter grid.")
         # grid search with cross validation
         k_folds = KFold(n_splits=5)
-        gs = GridSearchCV(pipeline, param_grid=search_grid,
-                          scoring=scorers, cv=k_folds,
-                          refit='AUC')
-        fitted_model = gs.fit(features, labels)
-        cv_results_frame = pd.DataFrame.from_dict(gs.cv_results_)
+        clf = GridSearchCV(pipeline, param_grid=search_grid, scoring=scorers,
+                           cv=k_folds, refit='AUC')
+        clf.fit(features, labels)
+        cv_results_frame = pd.DataFrame.from_dict(clf.cv_results_)
 
         logger.info(
-            f"Model fitted, the best score is {fitted_model.best_score_} "
-            f"and the best parameters are {fitted_model.best_params_}.")
+            f"Model fitted, the best score is {clf.best_score_} "
+            f"and the best parameters are {clf.best_params_}.")
 
         logger.info("Logging classification metrics")
         # Only log the best performance with the best params, the
         # rest will be saved as an artifact in a pd Dataframe
-        mlflow.log_params(fitted_model.best_params_)
-        mlflow.log_metric('Best_Score', fitted_model.best_score_)
+        mlflow.log_params(clf.best_params_)
+        mlflow.log_metric('Best_Score', clf.best_score_)
         for score_key, score_id in scorers.items():
             mlflow.log_metric(f'Mean_{score_key}',
                               cv_results_frame[f'mean_test_{score_key}'].max())
@@ -117,7 +116,7 @@ def train_classifier(training_data: Path, output_dir: Path,
 
         # log and save fitted model
         logger.info("Logging and Saving Fitted Model")
-        mlflow.sklearn.log_model(fitted_model, "FittedModel")
+        mlflow.sklearn.log_model(clf, "FittedModel")
 
         logger.info('Classifier Trained, Goodbye!')
 
