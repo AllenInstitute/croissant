@@ -20,12 +20,13 @@ def data_paths():
     yield training_data_path, testing_data_path
 
 
-@pytest.mark.parametrize("environment, experiment_name, search_grid",
-                         [('test', 'test_exp', {'model__l1_ratio': [0.25,
-                                                                    0.5,
-                                                                    0.75]})]
+@pytest.mark.parametrize(
+        "experiment_name, search_grid",
+        [
+            ('test_exp', {'model__l1_ratio': [0.25, 0.5, 0.75]})
+            ]
                          )
-def test_train_classifier(environment, experiment_name,
+def test_train_classifier(experiment_name,
                           search_grid, data_paths):
     with tempfile.TemporaryDirectory() as temp_out_dir:
         temp_uri = Path(temp_out_dir).as_uri()
@@ -33,8 +34,7 @@ def test_train_classifier(environment, experiment_name,
         mlflow.set_tracking_uri(temp_uri)
         mlflow.set_experiment(experiment_name)
 
-        train_classifier(environment=environment,
-                         training_data=data_paths[0],
+        train_classifier(training_data=data_paths[0],
                          output_dir=Path(temp_out_dir),
                          search_grid=search_grid)
 

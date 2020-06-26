@@ -17,16 +17,13 @@ from croissant.features import (Roi, RoiMetadata, FeatureExtractor,
 logger = logging.getLogger('TrainClassifier')
 
 
-def train_classifier(environment: str, training_data: Path, output_dir: Path,
+def train_classifier(training_data: Path, output_dir: Path,
                      search_grid: dict):
-    """Performs k-fold cross-validated grid search logistic regression and 
+    """Performs k-fold cross-validated grid search logistic regression and
     logs to mlflow.
 
     Parameters
     ----------
-    environment: str
-        `dev` or `production`. `dev` will keep output files in specified 
-        output directory while `production` will remove these.
     training_data: Path
         The path to the ROIs stored in json format for the classifier to train
         against
@@ -150,8 +147,7 @@ class ClassifierTrainer(argschema.ArgSchemaParser):
         mlflow.set_tracking_uri(mlflow_tracking_uri)
         mlflow.set_experiment(experiment_name)
 
-        train_classifier(environment=self.args['environment'],
-                         training_data=self.args['training_data'],
+        train_classifier(training_data=self.args['training_data'],
                          output_dir=self.args['output_dir'],
                          search_grid=search_grid)
 

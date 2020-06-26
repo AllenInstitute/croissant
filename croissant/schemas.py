@@ -1,5 +1,4 @@
 import argschema
-import marshmallow as mm
 
 
 """
@@ -23,11 +22,6 @@ Training Data: List[ROI]
 
 
 class TrainingSchema(argschema.ArgSchema):
-    environment = argschema.fields.String(
-        required=False,
-        default='dev',
-        validator=mm.validate.OneOf(['dev', 'prod']),
-        description="Either 'dev', 'prod'")
     experiment_name = argschema.fields.String(
         required=True,
         description="Experiment name (for organization in MLFlow)")
