@@ -8,7 +8,7 @@ from scipy.stats import skew
 import numpy as np
 import pandas as pd
 
-from croissant.roi import Roi, RoiMetadata
+from croissant.roi import Roi, RoiMetadata, RoiWithMetadata
 
 
 class FeatureExtractor:
@@ -72,6 +72,14 @@ class FeatureExtractor:
         self.dff_traces = dff_traces
         self.roi_ids = roi_ids
         self.metadata = pd.DataFrame.from_records(metadata)
+
+    @classmethod
+    def from_list_of_dict(self, data):
+        roi_list = [RoiWithMetadata.from_dict(r) for r in data]
+        rois = [r.roi for r in roi_list]
+        traces = [r.trace for r in roi_list]
+        metas = [r.roi_meta for r in roi_list]
+        return FeatureExtractor(rois=rois, dff_traces=traces, metadata=metas)
 
     @staticmethod
     def _ellipticalness(roi: coo_matrix) -> float:

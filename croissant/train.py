@@ -8,105 +8,122 @@ import pandas as pd
 import mlflow
 import mlflow.sklearn
 import argschema
-from typing import Dict, Any
+import joblib
+import tempfile
+from typing import Dict, Any, List
 
 from croissant.schemas import TrainingSchema
-from croissant.roi import RoiWithMetadata
 from croissant.features import FeatureExtractor, feature_pipeline
 
 
 logger = logging.getLogger('TrainClassifier')
 
 
-def train_classifier(training_data_path: Path, output_dir: Path,
-                     search_grid: Dict[str, Any]):
-    """Performs k-fold cross-validated grid search logistic regression and
-    logs to mlflow.
+def train_classifier(training_data_path: Path, param_grid: Dict[str, Any],
+                     scoring: List[str], refit: str) -> GridSearchCV:
+    """Performs k-fold cross-validated grid search logistic regression
 
     Parameters
     ----------
     training_data_path: Path
-        The path to the ROIs stored in json format for the classifier to train
-        against
-    output_dir: Path
-        The path to the directory where the output files will be stored
-    search_grid: Dict[str, Any]
-        The parameters upon which to grid search across during parameter tuning
+        path to training data in json format
+    param_grid: Dict[str, Any]
+        passed to GridSearchCV to specify parameter grid
+    scoring: List[str]
+        passed to GridSearchCV to specify tracked metrics
+    refit: str
+        passed to GridSearchCV to specify refit metric
 
     Returns
     -------
+    clf: GridSearchCV
+        the trained model
 
     """
-    # set tracker
-    with mlflow.start_run():
+    logger.info('Reading training data and extracting features.')
+    with open(training_data_path, 'r') as fp:
+        training_data = json.load(fp)
+    features = FeatureExtractor.from_list_of_dict(training_data).run()
+    labels = [r['label'] for r in training_data]
+
+    logger.info('Fitting model to data!')
+    pipeline = feature_pipeline()
+    model = LogisticRegression(penalty='elasticnet', solver='saga')
+    pipeline.steps.append(('model', model))
+    k_folds = KFold(n_splits=5)
+    clf = GridSearchCV(pipeline, param_grid=param_grid, scoring=scoring,
+                       cv=k_folds, refit=refit)
+    logger.info(f"fitting model with {clf.get_params()}")
+    clf.fit(features, labels)
+    return clf
+
+
+def mlflow_log_classifier(training_data_path: Path, clf: GridSearchCV) -> str:
+    """Logs a classifier with mlflow
+
+    Parameters
+    ----------
+    training_data_path: Path
+        path of the training data
+    clf: GridSeachCV
+        a trained classifier
+
+    Returns
+    -------
+    run_id: str
+        the mlflow-assigned run_id
+
+    """
+    with mlflow.start_run() as mlrun:
         mlflow.set_tags({'training_data_path': training_data_path,
-                         'search_grid': search_grid,
-                         'output_dir': output_dir})
+                         'param_grid': clf.param_grid})
 
-        logger.info("Extracting ROI data from manifest data!")
-        with open(training_data_path, 'r') as fp:
-            training_data = json.load(fp)
-        roi_list = [RoiWithMetadata.from_dict(r) for r in training_data]
-        rois = [r.roi for r in roi_list]
-        dff_traces = [r.trace for r in roi_list]
-        metadatas = [r.roi_meta for r in roi_list]
-        labels = [r.label for r in roi_list]
-
-        logger.info('Extracting features!')
-        features = FeatureExtractor(rois=rois,
-                                    dff_traces=dff_traces,
-                                    metadata=metadatas).run()
-
-        logger.info('Fitting model to data!')
-        pipeline = feature_pipeline()
-        model = LogisticRegression(penalty='elasticnet', solver='saga')
-        pipeline.steps.append(('model', model))
-        scorers = {'AUC': 'roc_auc'}
-        k_folds = KFold(n_splits=5)
-        clf = GridSearchCV(pipeline, param_grid=search_grid, scoring=scorers,
-                           cv=k_folds, refit='AUC')
-        logger.info(f"fitting model with {clf.get_params()}")
-        clf.fit(features, labels)
-
-        logger.info(
-            f"Model fitted, the best score is {clf.best_score_} "
-            f"and the best parameters are {clf.best_params_}.")
-
-        logger.info("Logging classification metrics")
         cv_results_frame = pd.DataFrame.from_dict(clf.cv_results_)
         mlflow.log_params(clf.best_params_)
         mlflow.log_metric('Best_Score', clf.best_score_)
-        for score_key, score_id in scorers.items():
+        for score_key in clf.scorer_.keys():
             mlflow.log_metric(f'Mean_{score_key}',
                               cv_results_frame[f'mean_test_{score_key}'].max())
             mlflow.log_metric(f'STD_{score_key}',
                               cv_results_frame[f'std_test_{score_key}'].max())
 
         # log and save fitted model
-        logger.info("Logging and Saving Fitted Model")
-        mlflow.sklearn.log_model(clf, "FittedModel")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tmp_model_path = Path(temp_dir) / "trained_model.joblib"
+            joblib.dump(clf.best_estimator_, tmp_model_path)
+            mlflow.log_artifact(tmp_model_path)
 
-        logger.info('Classifier Trained, Goodbye!')
+        run_id = mlrun.info.run_id
+
+    return run_id
 
 
 class ClassifierTrainer(argschema.ArgSchemaParser):
     default_schema = TrainingSchema
 
     def train(self):
-        logger.setLevel(self.args['log_level'])
+        self.logger.name = type(self).__name__
+        self.logger.setLevel(self.args.pop('log_level'))
 
-        if self.args['search_grid_path']:
-            with open(self.args['search_grid_path']) as open_grid:
-                search_grid = json.load(open_grid)
-        else:
-            search_grid = {'model__l1_ratio': [0.25, 0.5, 0.75]}
+        # train the classifier
+        clf = train_classifier(training_data=Path(self.args['training_data']),
+                               param_grid=self.args['param_grid'],
+                               scoring=self.args['scoring'],
+                               refit=self.args['refit'])
+        self.logger.info(
+            f"Model fit, with best score {clf.best_score_} "
+            f"and best parameters {clf.best_params_}.")
 
+        # log the training
         mlflow.set_tracking_uri(self.args['mlflow_tracking_uri'])
+        exp = mlflow.get_experiment_by_name(self.args['experiment_name'])
+        if not exp:
+            mlflow.create_experiment(
+                self.args['experiment_name'],
+                artifact_location=self.args['artifact_uri'])
         mlflow.set_experiment(self.args['experiment_name'])
-
-        train_classifier(training_data=Path(self.args['training_data']),
-                         output_dir=Path(self.args['output_dir']),
-                         search_grid=search_grid)
+        run_id = mlflow_log_classifier(self.args['training_data'], clf)
+        self.logger.info(f"logged training to mlflow run {run_id}")
 
 
 if __name__ == '__main__':
