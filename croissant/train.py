@@ -124,10 +124,11 @@ class ClassifierTrainer(argschema.ArgSchemaParser):
         self.logger.setLevel(self.args.pop('log_level'))
 
         # train the classifier
-        clf = train_classifier(training_data=Path(self.args['training_data']),
-                               param_grid=self.args['param_grid'],
-                               scoring=self.args['scoring'],
-                               refit=self.args['refit'])
+        clf = train_classifier(
+                training_data_path=Path(self.args['training_data']),
+                param_grid=self.args['param_grid'],
+                scoring=self.args['scoring'],
+                refit=self.args['refit'])
         self.logger.info(
             f"Model fit, with best score {clf.best_score_} "
             f"and best parameters {clf.best_params_}.")

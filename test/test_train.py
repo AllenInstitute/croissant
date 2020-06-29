@@ -1,6 +1,7 @@
 from pathlib import Path
 import tempfile
 import json
+import os
 
 import pytest
 from unittest.mock import MagicMock
@@ -8,6 +9,7 @@ import mlflow
 import mlflow.sklearn
 import joblib
 from functools import partial
+import subprocess
 
 import croissant.train as train
 from croissant.features import FeatureExtractor
@@ -144,7 +146,7 @@ def test_ClassifierTrainer(train_data, tmp_path, monkeypatch):
     ctrain.train()
 
     mock_train_classifier.assert_called_once_with(
-            training_data=train_data,
+            training_data_path=train_data,
             param_grid=args['param_grid'],
             scoring=args['scoring'],
             refit=args['refit'])
@@ -155,3 +157,48 @@ def test_ClassifierTrainer(train_data, tmp_path, monkeypatch):
             args['artifact_uri'],
             args['training_data'],
             mock_classifier)
+
+
+def test_end_to_end(train_data, tmp_path):
+    tracking_uri = tmp_path / "tracking"
+    tracking_uri.mkdir()
+    artifact_uri = tmp_path / "artifacts"
+    artifact_uri.mkdir()
+
+    parameters = {
+            'experiment_name': 'my_experiment',
+            "training_data": str(train_data),
+            "scoring": ['roc_auc'],
+            "refit": 'roc_auc',
+            'mlflow_tracking_uri': str(tracking_uri),
+            'artifact_uri': str(artifact_uri)
+            }
+
+    inj_path = tmp_path / "input_json"
+    with open(inj_path, "w") as f:
+        json.dump(parameters, f)
+
+    # NOTE
+    # see https://stackoverflow.com/questions/51819719/using-subprocess-in-anaconda-environment  # noqa
+    # for activating current conda env in subprocess
+    cmd = ["bash", "-c", "\"source activate root\";",
+           "mlflow", "run", os.getcwd(),
+           "-P", f"input_json=\"{str(inj_path)}\""]
+
+    # NOTE
+    # see https://github.com/mlflow/mlflow/issues/608
+    # for why we need the env variable
+    # which led me to use subprocess
+    # rather than the mlflow.projects.run() API call
+    myproc = subprocess.run(
+            cmd,
+            env={'MLFLOW_TRACKING_URI': str(tracking_uri)},
+            shell=True,
+            check=True)
+
+    assert myproc.returncode == 0
+
+    # NOTE
+    # we should check here that
+    # <artifact_uri>/<run_id>/artifacts/trained_model.joblib
+    # exists

@@ -6,4 +6,4 @@ entry_points:
   main:
     parameters:
       message: {type: str, default: "Hello World"}
-    command: "python example.py {message}"
+    command: "python -m croissant.train"

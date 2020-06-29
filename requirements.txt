@@ -4,7 +4,7 @@ pandas>=1.0.0
 scikit-learn>=0.23.1
 numpy
 scipy
-argschema
+argschema==2.0.1
 marshmallow
 setuptools
 mlflow
