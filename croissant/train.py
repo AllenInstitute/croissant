@@ -58,11 +58,19 @@ def train_classifier(training_data_path: Path, param_grid: Dict[str, Any],
     return clf
 
 
-def mlflow_log_classifier(training_data_path: Path, clf: GridSearchCV) -> str:
+def mlflow_log_classifier(experiment_name: str, tracking_uri: str,
+                          artifact_uri: str, training_data_path: Path,
+                          clf: GridSearchCV) -> str:
     """Logs a classifier with mlflow
 
     Parameters
     ----------
+    experiment_name: str
+        mlflow experiment name. If does not exist, creates
+    tracking_uri: str
+        uri to mlflow backend store via `mlflow.set_tracking_uri()`
+    artifact_uri: str
+        uri to mlflow artifact store via `mlflow.create_experiment()`
     training_data_path: Path
         path of the training data
     clf: GridSeachCV
@@ -74,6 +82,15 @@ def mlflow_log_classifier(training_data_path: Path, clf: GridSearchCV) -> str:
         the mlflow-assigned run_id
 
     """
+    # set up the mlflow experiment
+    mlflow.set_tracking_uri(tracking_uri)
+    exp = mlflow.get_experiment_by_name(experiment_name)
+    if not exp:
+        mlflow.create_experiment(experiment_name,
+                                 artifact_location=artifact_uri)
+    mlflow.set_experiment(experiment_name)
+
+    # log the run
     with mlflow.start_run() as mlrun:
         mlflow.set_tags({'training_data_path': training_data_path,
                          'param_grid': clf.param_grid})
@@ -82,6 +99,7 @@ def mlflow_log_classifier(training_data_path: Path, clf: GridSearchCV) -> str:
         mlflow.log_params(clf.best_params_)
         mlflow.log_metric('Best_Score', clf.best_score_)
         for score_key in clf.scorer_.keys():
+            # NOTE is this really what we want logged?
             mlflow.log_metric(f'Mean_{score_key}',
                               cv_results_frame[f'mean_test_{score_key}'].max())
             mlflow.log_metric(f'STD_{score_key}',
@@ -115,17 +133,14 @@ class ClassifierTrainer(argschema.ArgSchemaParser):
             f"and best parameters {clf.best_params_}.")
 
         # log the training
-        mlflow.set_tracking_uri(self.args['mlflow_tracking_uri'])
-        exp = mlflow.get_experiment_by_name(self.args['experiment_name'])
-        if not exp:
-            mlflow.create_experiment(
-                self.args['experiment_name'],
-                artifact_location=self.args['artifact_uri'])
-        mlflow.set_experiment(self.args['experiment_name'])
-        run_id = mlflow_log_classifier(self.args['training_data'], clf)
+        run_id = mlflow_log_classifier(self.args['experiment_name'],
+                                       self.args['mlflow_tracking_uri'],
+                                       self.args['artifact_uri'],
+                                       self.args['training_data'],
+                                       clf)
         self.logger.info(f"logged training to mlflow run {run_id}")
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma no cover
     trainer = ClassifierTrainer()
     trainer.train()
