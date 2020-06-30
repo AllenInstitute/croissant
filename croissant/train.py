@@ -10,25 +10,42 @@ import mlflow.sklearn
 import argschema
 import joblib
 import tempfile
-from typing import Dict, Any, List
+from typing import List
 
-from croissant.schemas import TrainingSchema
 from croissant.features import FeatureExtractor, feature_pipeline
 
 
 logger = logging.getLogger('TrainClassifier')
 
 
-def train_classifier(training_data_path: Path, param_grid: Dict[str, Any],
-                     scoring: List[str], refit: str) -> GridSearchCV:
+class TrainingSchema(argschema.ArgSchema):
+    training_data = argschema.fields.InputFile(
+        required=True,
+        description=("<stem>.json containing a list of dicts, where "
+                     "each dict can be passed into "
+                     "RoiWithMetaData.from_dict()."))
+    scoring = argschema.fields.List(
+        argschema.fields.Str,
+        required=False,
+        cli_as_single_argument=True,
+        default=['roc_auc'],
+        description=("evaluated metrics for the model. See "
+                     "https://scikit-learn.org/stable/modules/model_evaluation.html#scoring-parameter"))  # noqa
+    refit = argschema.fields.Str(
+        required=False,
+        default='roc_auc',
+        description=("metric for refitting the model. See "
+                     "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html"))  # noqa
+
+
+def train_classifier(training_data_path: Path, scoring: List[str],
+                     refit: str) -> GridSearchCV:
     """Performs k-fold cross-validated grid search logistic regression
 
     Parameters
     ----------
     training_data_path: Path
         path to training data in json format
-    param_grid: Dict[str, Any]
-        passed to GridSearchCV to specify parameter grid
     scoring: List[str]
         passed to GridSearchCV to specify tracked metrics
     refit: str
@@ -51,6 +68,7 @@ def train_classifier(training_data_path: Path, param_grid: Dict[str, Any],
     model = LogisticRegression(penalty='elasticnet', solver='saga')
     pipeline.steps.append(('model', model))
     k_folds = KFold(n_splits=5)
+    param_grid = {'model__l1_ratio': [0.25, 0.5, 0.75]}
     clf = GridSearchCV(pipeline, param_grid=param_grid, scoring=scoring,
                        cv=k_folds, refit=refit)
     logger.info(f"fitting model with {clf.get_params()}")
@@ -110,7 +128,6 @@ class ClassifierTrainer(argschema.ArgSchemaParser):
         # train the classifier
         clf = train_classifier(
                 training_data_path=Path(self.args['training_data']),
-                param_grid=self.args['param_grid'],
                 scoring=self.args['scoring'],
                 refit=self.args['refit'])
         self.logger.info(

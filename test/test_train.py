@@ -33,14 +33,11 @@ def mock_classifier(request):
     return mock_clf
 
 
-@pytest.mark.parametrize(
-        "search_grid", [{'model__l1_ratio': [0.25, 0.5, 0.75]}])
-def test_train_classifier(search_grid, train_data, test_data, tmp_path):
+def test_train_classifier(train_data, test_data, tmp_path):
     """tests that `train_classifier()` generates a classifier that
     makes binary predictions.
     """
     clf = train.train_classifier(training_data_path=train_data,
-                                 param_grid=search_grid,
                                  scoring=['roc_auc'],
                                  refit='roc_auc')
 
@@ -143,7 +140,6 @@ def test_ClassifierTrainer(train_data, tmp_path, monkeypatch):
     """
     args = {
             "training_data": str(train_data),
-            "param_grid": {'a': [1, 2, 3]},
             'scoring': ['a'],
             'refit': 'a',
             }
@@ -162,7 +158,6 @@ def test_ClassifierTrainer(train_data, tmp_path, monkeypatch):
 
     mock_train_classifier.assert_called_once_with(
             training_data_path=train_data,
-            param_grid=args['param_grid'],
             scoring=args['scoring'],
             refit=args['refit'])
 
