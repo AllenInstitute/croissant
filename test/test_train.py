@@ -1,16 +1,12 @@
 from pathlib import Path
 import tempfile
 import json
-import os
-
 import pytest
 from unittest.mock import MagicMock
 import mlflow
 import mlflow.sklearn
 import joblib
 from functools import partial
-import subprocess
-
 import croissant.train as train
 from croissant.features import FeatureExtractor
 
@@ -103,9 +99,13 @@ def test_mlflow_log_classifier(tmp_path, mock_classifier):
         for s in ['Mean', 'STD']:
             assert f"{s}_{scorer}" in myrun.data.metrics
         # tags
-        assert myrun.data.tags['training_data_path'] == training_data_path
-        assert myrun.data.tags['param_grid'] == \
-            repr(mock_classifier.param_grid)
+        expected_tags = {
+                'training_data_path': training_data_path,
+                'param_grid': repr(mock_classifier.param_grid)
+                }
+        for k, v in expected_tags.items():
+            assert k in myrun.data.tags
+            assert myrun.data.tags[k] == v
         # parameters
         for k, v in mock_classifier.best_params_.items():
             assert myrun.data.params[k] == repr(v)
