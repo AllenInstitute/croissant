@@ -24,6 +24,8 @@ def test_data():
 @pytest.fixture
 def mock_classifier(request):
     mock_clf = MagicMock()
+    mock_clf.n_splits_ = 5
+    mock_clf.best_index_ = 0
     mock_clf.best_score_ = request.param['best_score']
     mock_clf.best_params_ = request.param['best_params']
     mock_clf.param_grid = request.param['param_grid']
@@ -55,12 +57,16 @@ def test_train_classifier(train_data, test_data, tmp_path):
         [
             ({
                 'best_score': 123,
-                'best_params': {'a': 1, 'b': 2},
+                'best_params': {'a': 1, 'b': 2.0},
                 'param_grid': {'p1': [4, 5, 6.7]},
                 'scorer': "metric1",
                 'results': {
-                    'mean_test_metric1': [0.1, 0.2, 0.2],
-                    'std_test_metric1': [0.1, 0.2, 0.2]},
+                    'split0_test_metric1': [0.1, 0.2, 0.3, 0.4, 0.5],
+                    'split1_test_metric1': [0.1, 0.2, 0.3, 0.4, 0.5],
+                    'split2_test_metric1': [0.1, 0.2, 0.3, 0.4, 0.5],
+                    'split3_test_metric1': [0.1, 0.2, 0.3, 0.4, 0.5],
+                    'split4_test_metric1': [0.1, 0.2, 0.3, 0.4, 0.5],
+                    },
                 'pickled': {'something': ['to', 'pickle']}
                 }),
             ], indirect=["mock_classifier"])
@@ -109,10 +115,8 @@ def test_mlflow_log_classifier(tmp_path, mock_classifier):
     # check that this run has the right stuff
     myrun = client.get_run(run_id)
     # metrics
-    assert myrun.data.metrics['Best_Score'] == mock_classifier.best_score_
-    scorer = list(mock_classifier.scorer_.keys())[0]
-    for s in ['Mean', 'STD']:
-        assert f"{s}_{scorer}" in myrun.data.metrics
+    for k in mock_classifier.cv_results_.keys():
+        assert k in myrun.data.metrics
     # tags
     expected_tags = {
             'training_data_path': training_data_path,
@@ -121,9 +125,6 @@ def test_mlflow_log_classifier(tmp_path, mock_classifier):
     for k, v in expected_tags.items():
         assert k in myrun.data.tags
         assert myrun.data.tags[k] == v
-    # parameters
-    for k, v in mock_classifier.best_params_.items():
-        assert myrun.data.params[k] == repr(v)
     # artifact
     artifacts = client.list_artifacts(run_id)
     artifact_paths = [a.path for a in artifacts]
