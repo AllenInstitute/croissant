@@ -1,4 +1,5 @@
-from typing import Union, List
+from __future__ import annotations  # noqa
+from typing import Union, List, Dict, Any
 
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
@@ -74,7 +75,21 @@ class FeatureExtractor:
         self.metadata = pd.DataFrame.from_records(metadata)
 
     @classmethod
-    def from_list_of_dict(self, data):
+    def from_list_of_dict(
+            self, data: List[Dict[str, Any]]) -> FeatureExtractor:  # noqa
+        """constructs FeatureExtractor from a list of dictionaries
+
+        Parameters
+        ----------
+        data: list of dict
+            each dict conforms to format specified by
+            RoiWithMetadata.from_dict()
+
+        Returns
+        -------
+        FeatureExtractor
+
+        """
         roi_list = [RoiWithMetadata.from_dict(r) for r in data]
         rois = [r.roi for r in roi_list]
         traces = [r.trace for r in roi_list]

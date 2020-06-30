@@ -1,3 +1,4 @@
+from __future__ import annotations  # noqa
 from typing import TypedDict, Optional, List, Tuple
 
 
@@ -22,6 +23,9 @@ class RoiMetadata(TypedDict):
 
 
 class RoiWithMetadata():
+    """helper class for bundling together roi data and metadata
+    and optionally a label and trace data
+    """
     def __init__(self, roidata: Roi, metadata: RoiMetadata,
                  trace: Optional[List] = None,
                  label: Optional[bool] = None):
@@ -31,7 +35,22 @@ class RoiWithMetadata():
         self.label = label
 
     @classmethod
-    def from_dict(cls, d):
+    def from_dict(cls, d: dict) -> RoiWithMetadata:  # noqa
+        """constructs from a dictionary
+
+        Parameters
+        ----------
+        d: dict
+           required keys are those used for Roi(): roi_id, coo_cols, coo_rows,
+           coo_data, image_shape and those used for RoiMetadata(): depth,
+           full_genotype, targeted_structure, rig
+           optional keys are: trace, label
+
+        Returns
+        -------
+        RoiWithMetadata
+
+        """
         roi = Roi(
                 roi_id=d['roi_id'],
                 coo_cols=d['coo_cols'],
