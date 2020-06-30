@@ -7,7 +7,7 @@ import json
 @pytest.mark.parametrize(
         "mode, expected",
         [
-            ("default", TrainingSchema().dump_fields['param_grid'].default),
+            ("default", TrainingSchema().fields['param_grid'].default),
             ("from_file", {'some': 'stuff', '123': 'abc'}),
             ('from_dict', {'some': 'other', 'stuff': 123})])
 def test_param_grid(mode, expected, tmp_path):
