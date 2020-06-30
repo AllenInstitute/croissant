@@ -9,6 +9,7 @@ from functools import partial
 import croissant.train as train
 from croissant.features import FeatureExtractor
 import os
+import numpy as np
 
 
 @pytest.fixture()
@@ -32,7 +33,17 @@ def mock_classifier(request):
     mock_clf.cv_results_ = request.param['results']
     mock_clf.scorer_ = {request.param['scorer']: 'sklearn_callable'}
     mock_clf.best_estimator_ = request.param['pickled']
+    mock_clf.n_test = request.param['n_test_values']
+    mock_clf.predict = MagicMock(return_value=[0] * mock_clf.n_test)
     return mock_clf
+
+
+@pytest.fixture()
+def mock_FeatureExtractor():
+    mock_FE = MagicMock()
+    mock_FE.run = MagicMock()
+    mock_FE.from_list_of_dict = MagicMock(return_value=mock_FE)
+    yield mock_FE
 
 
 def test_train_classifier(train_data, test_data, tmp_path):
@@ -67,10 +78,12 @@ def test_train_classifier(train_data, test_data, tmp_path):
                     'split3_test_metric1': [0.1, 0.2, 0.3, 0.4, 0.5],
                     'split4_test_metric1': [0.1, 0.2, 0.3, 0.4, 0.5],
                     },
-                'pickled': {'something': ['to', 'pickle']}
+                'pickled': {'something': ['to', 'pickle']},
+                'n_test_values': 100
                 }),
             ], indirect=["mock_classifier"])
-def test_mlflow_log_classifier(tmp_path, mock_classifier):
+def test_mlflow_log_classifier(tmp_path, mock_classifier,
+                               mock_FeatureExtractor, monkeypatch):
     """with a mocked classifier, tests that `mlflow_log_classifier()` logs
     to mlflow
 
@@ -100,9 +113,20 @@ def test_mlflow_log_classifier(tmp_path, mock_classifier):
     mlflow.set_experiment(experiment_name)
     # end of setup block
 
+    # patch the FeatureExtractor call for testing
+    mpatcher = partial(monkeypatch.setattr, target=train)
+    mpatcher(name="FeatureExtractor", value=mock_FeatureExtractor)
+
+    # make a file with some labels in it
+    test_json = tmp_path / "test_labels.json"
+    labels = np.random.randint(0, 2, mock_classifier.n_test, dtype=int)
+    with open(test_json, "w") as f:
+        json.dump([{'label': int(i)} for i in labels], f)
+
     training_data_path = "some_string"
     run_id = train.mlflow_log_classifier(
             training_data_path,
+            str(test_json),
             mock_classifier)
 
     # check that this call adds a run to mlflow
@@ -114,7 +138,12 @@ def test_mlflow_log_classifier(tmp_path, mock_classifier):
 
     # check that this run has the right stuff
     myrun = client.get_run(run_id)
+    # params
+    assert 'classification_report' in myrun.data.params
     # metrics
+    for k, v in mock_classifier.best_params_.items():
+        assert k in myrun.data.metrics
+        assert myrun.data.metrics[k] == v
     for k in mock_classifier.cv_results_.keys():
         assert k in myrun.data.metrics
     # tags
@@ -136,11 +165,12 @@ def test_mlflow_log_classifier(tmp_path, mock_classifier):
     assert unpickled == mock_classifier.best_estimator_
 
 
-def test_ClassifierTrainer(train_data, tmp_path, monkeypatch):
+def test_ClassifierTrainer(train_data, test_data, tmp_path, monkeypatch):
     """tests argschema entry point with mocked training and logging
     """
     args = {
             "training_data": str(train_data),
+            "test_data": str(test_data),
             'scoring': ['a'],
             'refit': 'a',
             }
@@ -164,4 +194,5 @@ def test_ClassifierTrainer(train_data, tmp_path, monkeypatch):
 
     mock_mlflow_log_classifier.assert_called_once_with(
             args['training_data'],
+            args['test_data'],
             mock_classifier)

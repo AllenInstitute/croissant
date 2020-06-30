@@ -4,6 +4,8 @@ import logging
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import KFold, GridSearchCV
+from sklearn.metrics import (accuracy_score, confusion_matrix,
+                             classification_report)
 import mlflow
 import mlflow.sklearn
 import argschema
@@ -19,6 +21,11 @@ logger = logging.getLogger('TrainClassifier')
 
 class TrainingSchema(argschema.ArgSchema):
     training_data = argschema.fields.InputFile(
+        required=True,
+        description=("<stem>.json containing a list of dicts, where "
+                     "each dict can be passed into "
+                     "RoiWithMetaData.from_dict()."))
+    test_data = argschema.fields.InputFile(
         required=True,
         description=("<stem>.json containing a list of dicts, where "
                      "each dict can be passed into "
@@ -75,13 +82,17 @@ def train_classifier(training_data_path: Path, scoring: List[str],
     return clf
 
 
-def mlflow_log_classifier(training_data_path: Path, clf: GridSearchCV) -> str:
+def mlflow_log_classifier(training_data_path: Path,
+                          test_data_path: Path,
+                          clf: GridSearchCV) -> str:
     """Logs a classifier with mlflow
 
     Parameters
     ----------
     training_data_path: Path
         path of the training data
+    test_data_path: Path
+        path of the test data
     clf: GridSeachCV
         a trained classifier
 
@@ -96,7 +107,7 @@ def mlflow_log_classifier(training_data_path: Path, clf: GridSearchCV) -> str:
         mlflow.set_tags({'training_data_path': training_data_path,
                          'param_grid': clf.param_grid})
 
-        for k, v in clf.best_params:
+        for k, v in clf.best_params_.items():
             mlflow.log_metric(k, v)
         for score_key in clf.scorer_.keys():
             keys = [f"split{i}_test_{score_key}"
@@ -109,6 +120,22 @@ def mlflow_log_classifier(training_data_path: Path, clf: GridSearchCV) -> str:
             tmp_model_path = Path(temp_dir) / "trained_model.joblib"
             joblib.dump(clf.best_estimator_, tmp_model_path)
             mlflow.log_artifact(tmp_model_path)
+
+        # run the model on test_data
+        with open(test_data_path, 'r') as fp:
+            test_data = json.load(fp)
+        features = FeatureExtractor.from_list_of_dict(test_data).run()
+        y_true = [r['label'] for r in test_data]
+        y_pred = clf.predict(features)
+
+        mlflow.log_metric('test_accuracy', accuracy_score(y_true, y_pred))
+        cmat = confusion_matrix(y_true, y_pred)
+        for i in [0, 1]:
+            for j in [0, 1]:
+                mlflow.log_metric(f"count_{i}_{j}", cmat[i, j])
+
+        mlflow.log_param('classification_report',
+                         classification_report(y_true, y_pred))
 
         run_id = mlrun.info.run_id
 
@@ -132,7 +159,10 @@ class ClassifierTrainer(argschema.ArgSchemaParser):
             f"and best parameters {clf.best_params_}.")
 
         # log the training
-        run_id = mlflow_log_classifier(self.args['training_data'], clf)
+        run_id = mlflow_log_classifier(
+                self.args['training_data'],
+                self.args['test_data'],
+                clf)
         self.logger.info(f"logged training to mlflow run {run_id}")
 
 
