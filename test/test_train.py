@@ -78,7 +78,7 @@ def test_mlflow_log_classifier(tmp_path, mock_classifier):
     CLI setup of
     > mlflow experiments create \
             --experiment-name <ename> \
-            --artifact_location <path>
+            --artifact-location <path>
 
     and then, when running from the MLProject file
     > mlflow run . --experiment-name <ename> ...
