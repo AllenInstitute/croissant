@@ -5,7 +5,10 @@ scikit-learn>=0.23.1
 numpy
 scipy
 argschema==2.0.1
-marshmallow
 setuptools
 mlflow
 tables
+boto3
+moto
+jsonlines
+s3fs
