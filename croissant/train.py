@@ -58,19 +58,11 @@ def train_classifier(training_data_path: Path, param_grid: Dict[str, Any],
     return clf
 
 
-def mlflow_log_classifier(experiment_name: str, tracking_uri: str,
-                          artifact_uri: str, training_data_path: Path,
-                          clf: GridSearchCV) -> str:
+def mlflow_log_classifier(training_data_path: Path, clf: GridSearchCV) -> str:
     """Logs a classifier with mlflow
 
     Parameters
     ----------
-    experiment_name: str
-        mlflow experiment name. If does not exist, creates
-    tracking_uri: str
-        uri to mlflow backend store via `mlflow.set_tracking_uri()`
-    artifact_uri: str
-        uri to mlflow artifact store via `mlflow.create_experiment()`
     training_data_path: Path
         path of the training data
     clf: GridSeachCV
@@ -82,14 +74,6 @@ def mlflow_log_classifier(experiment_name: str, tracking_uri: str,
         the mlflow-assigned run_id
 
     """
-    # set up the mlflow experiment
-    mlflow.set_tracking_uri(tracking_uri)
-    exp = mlflow.get_experiment_by_name(experiment_name)
-    if not exp:
-        mlflow.create_experiment(experiment_name,
-                                 artifact_location=artifact_uri)
-    mlflow.set_experiment(experiment_name)
-
     # log the run
     with mlflow.start_run() as mlrun:
         mlflow.set_tags({'training_data_path': training_data_path,
@@ -134,11 +118,7 @@ class ClassifierTrainer(argschema.ArgSchemaParser):
             f"and best parameters {clf.best_params_}.")
 
         # log the training
-        run_id = mlflow_log_classifier(self.args['experiment_name'],
-                                       self.args['mlflow_tracking_uri'],
-                                       self.args['artifact_uri'],
-                                       self.args['training_data'],
-                                       clf)
+        run_id = mlflow_log_classifier(self.args['training_data'], clf)
         self.logger.info(f"logged training to mlflow run {run_id}")
 
 

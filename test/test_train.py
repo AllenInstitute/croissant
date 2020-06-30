@@ -1,5 +1,4 @@
 from pathlib import Path
-import tempfile
 import json
 import pytest
 from unittest.mock import MagicMock
@@ -9,6 +8,7 @@ import joblib
 from functools import partial
 import croissant.train as train
 from croissant.features import FeatureExtractor
+import os
 
 
 @pytest.fixture()
@@ -70,54 +70,72 @@ def test_train_classifier(search_grid, train_data, test_data, tmp_path):
 def test_mlflow_log_classifier(tmp_path, mock_classifier):
     """with a mocked classifier, tests that `mlflow_log_classifier()` logs
     to mlflow
+
+    Notes
+    -----
+    in production, we plan to run from the command line with `mlflow run ...`
+    the first block below, labeled "setup block" will have the equivalent
+    CLI setup of
+    > mlflow experiments create \
+            --experiment-name <ename> \
+            --artifact_location <path>
+
+    and then, when running from the MLProject file
+    > mlflow run . --experiment-name <ename> ...
+
+    mlflow run reads the tracking URI from the env variable
+    MLFLOW_TRACKING_URI
+
     """
-    with tempfile.TemporaryDirectory() as temp_out_dir:
-        experiment_name = "myexperiment"
-        tracking_uri = str(Path(temp_out_dir).as_uri())
-        artifact_uri = str(Path(tmp_path) / "artifacts")
-        training_data_path = "some_string"
+    # setup block
+    experiment_name = "myexperiment"
+    artifact_uri = str(tmp_path / "artifacts")
+    tracking_uri = str(tmp_path / "tracking")
+    os.environ['MLFLOW_TRACKING_URI'] = str(tracking_uri)
+    mlflow.create_experiment(
+            experiment_name, artifact_location=artifact_uri)
+    mlflow.set_experiment(experiment_name)
+    # end of setup block
 
-        run_id = train.mlflow_log_classifier(
-                experiment_name,
-                tracking_uri,
-                artifact_uri,
-                training_data_path,
-                mock_classifier)
+    training_data_path = "some_string"
+    run_id = train.mlflow_log_classifier(
+            training_data_path,
+            mock_classifier)
 
-        # check that this call adds a run to mlflow
-        client = mlflow.tracking.MlflowClient(tracking_uri=tracking_uri)
-        experiment = client.get_experiment_by_name(experiment_name)
-        run_infos = client.list_run_infos(experiment.experiment_id)
-        run_ids = [r.run_id for r in run_infos]
-        assert run_id in run_ids
+    # check that this call adds a run to mlflow
+    client = mlflow.tracking.MlflowClient(tracking_uri=str(tracking_uri))
+    experiment = client.get_experiment_by_name(experiment_name)
+    run_infos = client.list_run_infos(experiment.experiment_id)
+    run_ids = [r.run_id for r in run_infos]
+    assert run_id in run_ids
 
-        # check that this run has the right stuff
-        myrun = client.get_run(run_id)
-        # metrics
-        assert myrun.data.metrics['Best_Score'] == mock_classifier.best_score_
-        scorer = list(mock_classifier.scorer_.keys())[0]
-        for s in ['Mean', 'STD']:
-            assert f"{s}_{scorer}" in myrun.data.metrics
-        # tags
-        expected_tags = {
-                'training_data_path': training_data_path,
-                'param_grid': repr(mock_classifier.param_grid)
-                }
-        for k, v in expected_tags.items():
-            assert k in myrun.data.tags
-            assert myrun.data.tags[k] == v
-        # parameters
-        for k, v in mock_classifier.best_params_.items():
-            assert myrun.data.params[k] == repr(v)
-        # artifact
-        artifacts = client.list_artifacts(run_id)
-        artifact_paths = [a.path for a in artifacts]
-        model = "trained_model.joblib"
-        assert model in artifact_paths
-        my_artifact_path = Path(myrun.info.artifact_uri) / model
-        assert my_artifact_path.exists()
-        unpickled = joblib.load(my_artifact_path)
-        assert unpickled == mock_classifier.best_estimator_
+    # check that this run has the right stuff
+    myrun = client.get_run(run_id)
+    # metrics
+    assert myrun.data.metrics['Best_Score'] == mock_classifier.best_score_
+    scorer = list(mock_classifier.scorer_.keys())[0]
+    for s in ['Mean', 'STD']:
+        assert f"{s}_{scorer}" in myrun.data.metrics
+    # tags
+    expected_tags = {
+            'training_data_path': training_data_path,
+            'param_grid': repr(mock_classifier.param_grid)
+            }
+    for k, v in expected_tags.items():
+        assert k in myrun.data.tags
+        assert myrun.data.tags[k] == v
+    # parameters
+    for k, v in mock_classifier.best_params_.items():
+        assert myrun.data.params[k] == repr(v)
+    # artifact
+    artifacts = client.list_artifacts(run_id)
+    artifact_paths = [a.path for a in artifacts]
+    model = "trained_model.joblib"
+    assert model in artifact_paths
+    my_artifact_path = Path(myrun.info.artifact_uri) / model
+    assert my_artifact_path.exists()
+    unpickled = joblib.load(my_artifact_path)
+    assert unpickled == mock_classifier.best_estimator_
 
 
 def test_ClassifierTrainer(train_data, tmp_path, monkeypatch):
@@ -128,9 +146,6 @@ def test_ClassifierTrainer(train_data, tmp_path, monkeypatch):
             "param_grid": {'a': [1, 2, 3]},
             'scoring': ['a'],
             'refit': 'a',
-            'experiment_name': 'my_experiment',
-            'mlflow_tracking_uri': str(tmp_path),
-            'artifact_uri': str(tmp_path),
             }
 
     mock_classifier = MagicMock()
@@ -152,8 +167,5 @@ def test_ClassifierTrainer(train_data, tmp_path, monkeypatch):
             refit=args['refit'])
 
     mock_mlflow_log_classifier.assert_called_once_with(
-            args['experiment_name'],
-            args['mlflow_tracking_uri'],
-            args['artifact_uri'],
             args['training_data'],
             mock_classifier)

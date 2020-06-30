@@ -4,9 +4,6 @@ import json
 
 
 class TrainingSchema(argschema.ArgSchema):
-    experiment_name = argschema.fields.String(
-        required=True,
-        description="Experiment name (for organization in MLFlow)")
     training_data = argschema.fields.InputFile(
         required=True,
         description=("<stem>.json containing a list of dicts, where "
@@ -36,23 +33,6 @@ class TrainingSchema(argschema.ArgSchema):
         description=("passed to GridSearchCV as `param_grid`. If "
                      "`param_grid_path` is passed, `param_grid` is set "
                      "with the contents of that file."))
-    mlflow_tracking_uri = argschema.fields.String(
-        required=False,
-        allow_none=True,
-        default=None,
-        description=("passed to mlflow.set_tracking_uri(). If None mlflow "
-                     "sets to./mlruns. This sets the backend store as: "
-                     "https://www.mlflow.org/docs/latest/tracking.html#backend-stores"))  # noqa
-    artifact_uri = argschema.fields.Str(
-        required=True,
-        description=("will be used as the artifact store, as: "
-                     "https://www.mlflow.org/docs/latest/tracking.html#artifact-stores"))  # noqa
-
-    @mm.post_load
-    def check_artifact_uri(self, data, **kwargs):
-        if not data['artifact_uri'].startswith("s3://"):
-            argschema.fields.files.validate_outpath(data['artifact_uri'])
-        return data
 
     @mm.post_load
     def check_param_grid(self, data, **kwargs):
