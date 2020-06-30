@@ -4,7 +4,6 @@ import logging
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import KFold, GridSearchCV
-import pandas as pd
 import mlflow
 import mlflow.sklearn
 import argschema
@@ -97,15 +96,13 @@ def mlflow_log_classifier(training_data_path: Path, clf: GridSearchCV) -> str:
         mlflow.set_tags({'training_data_path': training_data_path,
                          'param_grid': clf.param_grid})
 
-        cv_results_frame = pd.DataFrame.from_dict(clf.cv_results_)
-        mlflow.log_params(clf.best_params_)
-        mlflow.log_metric('Best_Score', clf.best_score_)
+        for k, v in clf.best_params:
+            mlflow.log_metric(k, v)
         for score_key in clf.scorer_.keys():
-            # NOTE is this really what we want logged?
-            mlflow.log_metric(f'Mean_{score_key}',
-                              cv_results_frame[f'mean_test_{score_key}'].max())
-            mlflow.log_metric(f'STD_{score_key}',
-                              cv_results_frame[f'std_test_{score_key}'].max())
+            keys = [f"split{i}_test_{score_key}"
+                    for i in range(clf.n_splits_)]
+            for k in keys:
+                mlflow.log_metric(k, clf.cv_results_[k][clf.best_index_])
 
         # log and save fitted model
         with tempfile.TemporaryDirectory() as temp_dir:
