@@ -13,11 +13,12 @@ RUN apt-get update && apt-get -y install jq
 
 # Get secret info and connect to database
 # Must be using VPN, in VPC, or have public endpoint for backend store
-CMD secret=$(aws secretsmanager get-secret-value --secret-id test/mlflow --query SecretString --output text) &&\
+CMD secret=$(aws secretsmanager get-secret-value --secret-id $SECRET_NAME --query SecretString --output text) &&\
     USER=$(echo $secret | jq .username -r) && \
     PASSWORD=$(echo $secret | jq .password -r) && \
     HOST=$(echo $secret | jq .host -r) && \
     PORT=$(echo $secret | jq .port -r) && \
+    DBNAME=$(echo $secret | jq .dbname -r) && \
     mlflow ui \
       --host 0.0.0.0 \
-      --backend-store-uri postgresql://$USER:$PASSWORD@$HOST:$PORT
+      --backend-store-uri postgresql://$USER:$PASSWORD@$HOST:$PORT/$DBNAME

@@ -1,0 +1,324 @@
+# Sets up all required resources for MLFlow to use a serverless tracking
+# database, and access remotely through a VPN.
+# Summary:
+#   Creates VPC with two subnets in separate AZs and associated route table
+#   Creates serverless Aurora RDS running Postgres 10.6 in the VPC
+#       Credentials automatically configured and stored in Secrets Manager
+#   Creates security group with open rules for ingress/egres on ports:
+#       ClientVpnPort (default=443)
+#       PostgresQL port (5432)
+#       SSH (ingress only) 22
+#   Creates VPN to access VPC resources (certificate authentication), using security group
+#       Requires previously creating server and client certificates, and uploading them to certificate registry
+#       See https://docs.aws.amazon.com/vpn/latest/clientvpn-admin/cvpn-getting-started.html#cvpn-getting-started-certs
+#       Adds logging
+
+Parameters:
+
+  StackType:
+    Type: String
+    Description: What is the role of this stack
+    AllowedValues: 
+      - dev
+      - stage
+      - prod
+
+  ServerCertificateArn:
+    Type: String
+    Description: ARN of server certificate for mutual authentication
+  
+  ClientCertificateArn:
+    Type: String
+    Description: ARN of client certificate for mutual authentication
+  
+  ClientVpnPort:
+    Type: Number
+    Default: 443
+    Description: Port for client VPN
+  
+  SecurityGroupCIDR:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR IP to be granted access by the security group; use 0.0.0.0/0 to accept all IPs
+  
+  VpcCIDR:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: CIDR IP for the VPC
+  
+  ClientIpCidrBlock:
+    Type: String
+    Default: 172.30.0.0/16
+    Description: CIDR block of IP addresses to assign to VPN clients. Can't overlap with local CIDR of VPC or manually added routes.
+  
+  ClientDestinationCidrBlock:
+    Type: String
+    Default: 172.31.0.0/16
+    Description: VPN Endpoint destination CIDR block
+  
+  SubnetCIDRs:
+    Type: CommaDelimitedList 
+    Default: 10.0.10.0/24,10.0.11.0/24
+    Description: CIDR blocks for subsets. Can't overlap with local CIDR of VPC or VPN assignment.
+
+Resources:
+
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: croissant-mlflow-vpc
+        - Key: Application
+          Value: !Ref "AWS::StackName"
+  
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select 
+        - 0
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      CidrBlock: !Select
+        - 0
+        - !Ref SubnetCIDRs
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Application
+          Value: !Ref "AWS::StackName"
+        - Key: Network
+          Value: VPN Connected Subnet
+  
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select 
+        - 1
+        - Fn::GetAZs: !Ref 'AWS::Region'
+      CidrBlock: !Select
+        - 1
+        - !Ref SubnetCIDRs
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Application
+          Value: !Ref "AWS::StackName"
+        - Key: Network
+          Value: VPN Connected Subnet
+
+  VpcSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-vpce-sg"
+      GroupDescription: Allow connections from specified source security group
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: udp
+          FromPort: !Ref ClientVpnPort
+          ToPort: !Ref ClientVpnPort
+          CidrIp: !Ref SecurityGroupCIDR
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SecurityGroupCIDR
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432      # For Postgres DB
+          CidrIp: !Ref SecurityGroupCIDR
+      SecurityGroupEgress:
+        - IpProtocol: udp
+          FromPort: !Ref ClientVpnPort
+          ToPort: !Ref ClientVpnPort
+          CidrIp: !Ref SecurityGroupCIDR
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432      # For Postgres DB
+          CidrIp: !Ref SecurityGroupCIDR
+
+
+  VpcInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties: 
+      Tags: 
+        - Key: Name
+          Value: mlflowVPC
+  
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: 
+      InternetGatewayId: !Ref VpcInternetGateway
+      VpcId: !Ref Vpc
+    
+  PrivateRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+        - Key: Network
+          Value: VPN Connected Subnet
+  
+  # Access s3 without traffic leaving VPC
+  S3VpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties: 
+      # PolicyDocument: Json
+      PrivateDnsEnabled: false
+      RouteTableIds: 
+        - !Ref PrivateRouteTable
+      ServiceName: com.amazonaws.us-west-2.s3
+      VpcEndpointType: Gateway
+      VpcId: !Ref Vpc
+
+  # Need to associate the route table manually to the subnets
+  # Because can't edit the main
+  PrivateSubnetRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+  
+  InternetGatewayRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref VpcInternetGateway
+      RouteTableId: !Ref PrivateRouteTable
+  
+  ClientVpnEndpoint:
+    Type: "AWS::EC2::ClientVpnEndpoint"
+    Properties:
+        AuthenticationOptions:
+          - Type: "certificate-authentication"
+            MutualAuthentication:
+              ClientRootCertificateChainArn: !Ref ClientCertificateArn
+        ClientCidrBlock: !Ref ClientIpCidrBlock    # Can't overlap with local CIDR of VPC or manually added routes
+        ConnectionLogOptions:
+          Enabled: true
+          CloudwatchLogGroup: !Ref ClientVpnLogGroup
+          CloudwatchLogStream: !Ref ClientVpnLogStream
+        Description: VPN to access VPC Resources for MLFlow
+        SecurityGroupIds:
+          - !Ref VpcSecurityGroup
+        ServerCertificateArn: !Ref ServerCertificateArn
+        SplitTunnel: true
+        VpcId: !Ref Vpc
+        VpnPort: 443
+
+  ClientVpnLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Sub "/aws/clientvpn/${StackType}/${AWS::StackName}"
+      RetentionInDays: 7
+
+  ClientVpnLogStream:
+    Type: "AWS::Logs::LogStream"
+    Properties:
+      LogGroupName: !Ref ClientVpnLogGroup
+      LogStreamName: !Sub "${StackType}-${AWS::StackName}-clientVpn"
+
+  ClientVpnTargetNetworkAssociation:
+    Type: "AWS::EC2::ClientVpnTargetNetworkAssociation"
+    Properties:
+      ClientVpnEndpointId: !Ref ClientVpnEndpoint
+      SubnetId: !Ref PrivateSubnet
+    
+  ClientVpnRoute:
+    Type: "AWS::EC2::ClientVpnRoute"
+    Properties:
+      ClientVpnEndpointId: !Ref ClientVpnEndpoint
+      Description: Route for client VPN
+      DestinationCidrBlock: !Ref ClientDestinationCidrBlock
+      TargetVpcSubnetId: !Ref PrivateSubnet
+    DependsOn: ClientVpnTargetNetworkAssociation
+  
+  ClientVpnAuthorization:
+    Type: AWS::EC2::ClientVpnAuthorizationRule
+    Properties: 
+      AuthorizeAllGroups: true
+      ClientVpnEndpointId: !Ref ClientVpnEndpoint
+      Description: Full network access
+      TargetNetworkCidr: !Ref VpcCIDR
+  
+  AuroraDBSubnetGroup:
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties: 
+      DBSubnetGroupDescription: Database subnet group to launch RDS in the VPC
+      DBSubnetGroupName: !Sub "${AWS::StackName}-dbsubnetgroup"    # Gets lowercased during creation; results in issues if have uppercase
+      SubnetIds: 
+        - !Ref PrivateSubnet
+        - !Ref PrivateSubnet2
+  
+  ServerlessAuroraDb:
+    Type: "AWS::RDS::DBCluster"
+    Properties:
+      BackupRetentionPeriod: 1
+      DatabaseName: !Sub "${StackType}MLFlowDB"
+      DBClusterIdentifier: !Sub "${StackType}-mlflow-db-cluster"
+      DBClusterParameterGroupName: default.aurora-postgresql10
+      DBSubnetGroupName: !Ref AuroraDBSubnetGroup
+      EnableHttpEndpoint: true
+      Engine: aurora-postgresql
+      EngineMode: serverless
+      EngineVersion: "10.7"
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}::username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}::password}}'
+      Port: 5432
+      ScalingConfiguration:
+        AutoPause: true
+        MaxCapacity: 32
+        MinCapacity: 2
+        SecondsUntilAutoPause: 500
+      StorageEncrypted: true
+      VpcSecurityGroupIds:
+        - !Ref VpcSecurityGroup
+    DependsOn: AuroraDBSubnetGroup
+  
+  DBSecret:
+    Type: "AWS::SecretsManager::Secret"
+    Properties:
+      Name: !Sub "${AWS::StackName}-${StackType}-MLFlowDbSecret"
+      Description: "Dynamically generated password for master user of MLFlow Serverless DB"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "mlflow"}'
+        GenerateStringKey: "password"
+        PasswordLength: 20
+        ExcludeCharacters: '"@/\'
+      Tags:
+        -
+          Key: AppName
+          Value: MlFlowServerlessDb
+    
+  DbSecretTargetAttachment:
+    Type: AWS::SecretsManager::SecretTargetAttachment
+    Properties:
+      SecretId: !Ref DBSecret
+      TargetId: !Ref ServerlessAuroraDb
+      TargetType: AWS::RDS::DBCluster
+
+Outputs:
+  VPCId:
+    Description: VPCId of the newly created VPC
+    Value: !Ref Vpc
+  PrivateSubnet:
+    Description: SubnetId of the VPN connected subnet
+    Value: !Ref PrivateSubnet
+  ClientVpnEndpoint:
+    Description: ClientVpnEndpointId of the newly created ClientVpnEndpoint
+    Value: !Ref ClientVpnEndpoint
+  MlflowDB:
+    Description: Serverless postgres aurora db
+    Value: !Ref ServerlessAuroraDb
+  DBSecret:
+    Description: Secrets manager for serverless db
+    Value: !Ref DBSecret
