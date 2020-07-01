@@ -64,12 +64,15 @@ To run the MLFlow UI from the docker container, you need to bind the default
 port (5000) on the container to a port on our machine so that you can access
 it through the web browser. You also must mount your ~/.aws directory volume
 so that the AWS CLI can use your credentials and settings. The & at the end
-runs the process in the background.
+runs the process in the background. Finally, you'll have to pass the name of
+the secret in AWS Secrets Manager that contains the credentials to access the
+MLFlow Database (running on postgres).
 
 ```
 docker run \
     -p 5000:5000 \
     -v ~/.aws:/root/.aws \
+    --env SECRET_NAME=<name of secret in secrets manager to access tracking DB> \
     --rm \
     croissant-mlflow:latest \
     &
