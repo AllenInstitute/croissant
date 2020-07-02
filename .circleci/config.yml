@@ -12,6 +12,7 @@ jobs:
             python -m pytest --cov croissant --cov-report xml
             bash <(curl -s https://codecov.io/bash) -t ${CODECOV_TOKEN}
           name: Test
+
   lint:
     executor: python/default
     steps:
@@ -26,6 +27,49 @@ jobs:
             echo ${CHANGED_PYFILES} | xargs -r flake8 --count
           name: Lint
 
+  mlflow-cli:
+    docker:
+      - image: ubuntu:bionic
+    steps:
+      - checkout
+      - run:
+          name: Setup Miniconda
+          command: |
+            apt update
+            apt install -y wget git
+            cd $HOME
+            wget "https://repo.anaconda.com/miniconda/Miniconda3-py38_4.8.3-Linux-x86_64.sh" -O miniconda.sh
+            printf '%s' "879457af6a0bf5b34b48c12de31d4df0ee2f06a8e68768e5758c3293b2daf688 miniconda.sh" | sha256sum -c
+            bash miniconda.sh -b -p $HOME/miniconda
+            # make ENV vars available to next run steps
+            echo "export PATH=$HOME/miniconda/bin:$PATH" >> $BASH_ENV
+            echo "export CONDA_BASE=$HOME/miniconda" >> $BASH_ENV
+      - run:
+          name: Install mlflow
+          command: |
+            . $CONDA_BASE/etc/profile.d/conda.sh
+            conda activate base
+            pip install mlflow
+      - run:
+          name: Run Mlflow CLI
+          command: |
+            . $CONDA_BASE/etc/profile.d/conda.sh
+            export MLFLOW_TRACKING_URI=$HOME/tracking
+            export ARTIFACT_URI=$HOME/artifacts
+            export MYEXPERIMENT=test_experiment
+            conda activate base
+            mlflow experiments create \
+              --experiment-name ${MYEXPERIMENT} \
+              --artifact-location ${ARTIFACT_URI}
+            mlflow run . \
+              --backend local \
+              --experiment-name ${MYEXPERIMENT} \
+              -P training_data=$PWD/test/resources/dev_train_rois.json \
+              -P test_data=$PWD/test/resources/dev_test_rois.json \
+              -P scoring="['roc_auc']" \
+              -P refit=roc_auc \
+              -P log_level=INFO
+
 orbs:
   python: circleci/python@0.1
 version: 2.1
@@ -34,3 +78,7 @@ workflows:
     jobs:
       - build
       - lint
+      - mlflow-cli:
+          requires:
+            - build
+            - lint
