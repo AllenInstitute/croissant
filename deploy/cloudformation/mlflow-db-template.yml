@@ -293,7 +293,7 @@ Resources:
         SecretStringTemplate: '{"username": "mlflow"}'
         GenerateStringKey: "password"
         PasswordLength: 20
-        ExcludeCharacters: '"@/\'
+        ExcludePunctuation: true
       Tags:
         -
           Key: AppName
