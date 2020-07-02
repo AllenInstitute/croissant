@@ -1,4 +1,5 @@
-from typing import Union, TypedDict, Optional, List, Tuple
+from __future__ import annotations  # noqa
+from typing import Union, List, Dict, Any
 
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
@@ -8,25 +9,7 @@ from scipy.stats import skew
 import numpy as np
 import pandas as pd
 
-
-class Roi(TypedDict):
-    """ROI mask image data.
-    """
-    roi_id: Optional[int]
-    # Data for reconstructing mask on image planes
-    coo_rows: List[int]
-    coo_cols: List[int]
-    coo_data: List[float]
-    image_shape: Tuple[int, int]
-
-
-class RoiMetadata(TypedDict):
-    """Metadata associated experiments from which ROIs were extracted.
-    """
-    depth: int        # Microscope imaging depth
-    full_genotype: str             # Mouse CRE line
-    targeted_structure: str          # Targeted brain area (imaging)
-    rig: str                  # Name of imaging rig
+from croissant.roi import Roi, RoiMetadata, RoiWithMetadata
 
 
 class FeatureExtractor:
@@ -90,6 +73,28 @@ class FeatureExtractor:
         self.dff_traces = dff_traces
         self.roi_ids = roi_ids
         self.metadata = pd.DataFrame.from_records(metadata)
+
+    @classmethod
+    def from_list_of_dict(
+            self, data: List[Dict[str, Any]]) -> FeatureExtractor:  # noqa
+        """constructs FeatureExtractor from a list of dictionaries
+
+        Parameters
+        ----------
+        data: list of dict
+            each dict conforms to format specified by
+            RoiWithMetadata.from_dict()
+
+        Returns
+        -------
+        FeatureExtractor
+
+        """
+        roi_list = [RoiWithMetadata.from_dict(r) for r in data]
+        rois = [r.roi for r in roi_list]
+        traces = [r.trace for r in roi_list]
+        metas = [r.roi_meta for r in roi_list]
+        return FeatureExtractor(rois=rois, dff_traces=traces, metadata=metas)
 
     @staticmethod
     def _ellipticalness(roi: coo_matrix) -> float:
