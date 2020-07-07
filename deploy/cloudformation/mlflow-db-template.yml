@@ -109,6 +109,11 @@ Resources:
         - Key: Network
           Value: VPN Connected Subnet
 
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${StackType}.croissant-artifacts.alleninstitute.org"
+
   VpcSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
