@@ -114,6 +114,13 @@ Resources:
     Properties:
       BucketName: !Sub "${StackType}.croissant-artifacts.alleninstitute.org"
 
+  VpcUserSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-users-vpce-sg"
+      GroupDescription: Security group to add individual IPs for access to instances
+      VpcId: !Ref Vpc
+
   VpcSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -124,25 +131,36 @@ Resources:
         - IpProtocol: udp
           FromPort: !Ref ClientVpnPort
           ToPort: !Ref ClientVpnPort
-          CidrIp: !Ref SecurityGroupCIDR
+          SourceSecurityGroupId: !Ref VpcUserSecurityGroup
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: !Ref SecurityGroupCIDR
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432      # For Postgres DB
-          CidrIp: !Ref SecurityGroupCIDR
+          SourceSecurityGroupId: !Ref VpcUserSecurityGroup
       SecurityGroupEgress:
         - IpProtocol: udp
           FromPort: !Ref ClientVpnPort
           ToPort: !Ref ClientVpnPort
           CidrIp: !Ref SecurityGroupCIDR
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432      # For Postgres DB
-          CidrIp: !Ref SecurityGroupCIDR
-
+    
+  PostgresVpcSecurityIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Access postgres ports (ingress)
+      GroupId: !Ref VpcSecurityGroup
+      SourceSecurityGroupId: !Ref VpcSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+  
+  PostgresVpcSecurityEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: Access postgres ports (egress)
+      GroupId: !Ref VpcSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      CidrIp: !Ref SecurityGroupCIDR
 
   VpcInternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -215,6 +233,7 @@ Resources:
         Description: VPN to access VPC Resources for MLFlow
         SecurityGroupIds:
           - !Ref VpcSecurityGroup
+          - !Ref VpcUserSecurityGroup
         ServerCertificateArn: !Ref ServerCertificateArn
         SplitTunnel: true
         VpcId: !Ref Vpc
