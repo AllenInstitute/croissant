@@ -1,9 +1,27 @@
 """Miscellaneous utility functions that don't quite belong elsewhere."""
-from typing import Any
+from typing import Any, Union, Generator
 from functools import reduce
 import operator
 import boto3
 from urllib.parse import urlparse
+from pathlib import Path
+import jsonlines
+
+
+def read_jsonlines(uri: Union[str, Path]) -> Generator[dict, None, None]:
+    """
+    Generator to load jsonlines file from either s3 or a local
+    file, given a uri (s3 uri or local filepath).
+    """
+    if str(uri).startswith("s3://"):
+        data = s3_get_object(uri)["Body"].iter_lines(chunk_size=8192)    # The lines can be big        # noqa
+        reader = jsonlines.Reader(data)
+    else:
+        data = open(uri, "rb")
+        reader = jsonlines.Reader(data)
+    for record in reader:
+        yield record
+    reader.close()
 
 
 def nested_get_item(obj: dict, key_list: list) -> Any:
