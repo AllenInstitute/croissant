@@ -12,6 +12,17 @@ def read_jsonlines(uri: Union[str, Path]) -> Generator[dict, None, None]:
     """
     Generator to load jsonlines file from either s3 or a local
     file, given a uri (s3 uri or local filepath).
+
+    Parameters
+    ----------
+    uri: str or Path
+        source file in jsonlines format
+
+    Yields
+    ------
+    record: dict
+        a single entry from the file
+
     """
     if str(uri).startswith("s3://"):
         data = s3_get_object(uri)["Body"].iter_lines(chunk_size=8192)    # The lines can be big        # noqa
