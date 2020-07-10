@@ -3,23 +3,8 @@ from pathlib import Path
 import pandas as pd
 from functools import partial
 import argparse
-import jsonlines
 
-from croissant.utils import s3_get_object, nested_get_item
-
-
-def _read_jsonlines(uri: Union[str, Path]) -> jsonlines.Reader:
-    """
-    Helper function to load jsonlines file from either s3 or a local
-    file, given a uri (s3 uri or local filepath).
-    """
-    if str(uri).startswith("s3://"):
-        data = s3_get_object(uri)["Body"].iter_lines(chunk_size=8192)    # The lines can be big        # noqa
-        reader = jsonlines.Reader(data)
-    else:
-        data = open(uri, "rb")
-        reader = jsonlines.Reader(data)
-    return reader
+from croissant.utils import nested_get_item, read_jsonlines
 
 
 def annotation_df_from_file(
@@ -72,7 +57,7 @@ def annotation_df_from_file(
         croissant.utils.nested_get_item. If the key is top-level, pass
         it as a 1-tuple.
     """
-    reader = _read_jsonlines(filepath)
+    reader = read_jsonlines(filepath)
     parser = partial(parse_annotation, project_key=project_key,
                      label_key=label_key, annotations_key=annotations_key,
                      min_annotations=min_annotations, on_missing=on_missing)
@@ -90,7 +75,6 @@ def annotation_df_from_file(
             labels[label_key].append(parser(record))
     else:
         labels = {label_key: list(map(parser, reader))}
-    reader.close()
     return pd.DataFrame(labels)
 
 
