@@ -4,8 +4,7 @@ import logging
 
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import KFold, GridSearchCV
-from sklearn.metrics import (accuracy_score, confusion_matrix,
-                             classification_report)
+from sklearn.metrics import accuracy_score, confusion_matrix
 import mlflow
 import mlflow.sklearn
 import argschema
@@ -119,7 +118,7 @@ def mlflow_log_classifier(training_data_path: Path,
         with tempfile.TemporaryDirectory() as temp_dir:
             tmp_model_path = Path(temp_dir) / "trained_model.joblib"
             joblib.dump(clf.best_estimator_, tmp_model_path)
-            mlflow.log_artifact(tmp_model_path)
+            mlflow.log_artifact(str(tmp_model_path))
 
         # run the model on test_data
         with open(test_data_path, 'r') as fp:
@@ -132,10 +131,7 @@ def mlflow_log_classifier(training_data_path: Path,
         cmat = confusion_matrix(y_true, y_pred)
         for i in [0, 1]:
             for j in [0, 1]:
-                mlflow.log_metric(f"count_{i}_{j}", cmat[i, j])
-
-        mlflow.log_param('classification_report',
-                         classification_report(y_true, y_pred))
+                mlflow.log_metric(f"count_{i}_{j}", int(cmat[i, j]))
 
         run_id = mlrun.info.run_id
 
