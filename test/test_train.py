@@ -138,8 +138,6 @@ def test_mlflow_log_classifier(tmp_path, mock_classifier,
 
     # check that this run has the right stuff
     myrun = client.get_run(run_id)
-    # params
-    assert 'classification_report' in myrun.data.params
     # metrics
     for k, v in mock_classifier.best_params_.items():
         assert k in myrun.data.metrics
