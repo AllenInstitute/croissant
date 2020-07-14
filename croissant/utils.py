@@ -6,6 +6,8 @@ import boto3
 from urllib.parse import urlparse
 from pathlib import Path
 import jsonlines
+import json
+from botocore.exceptions import ClientError
 
 
 def read_jsonlines(uri: Union[str, Path]) -> Generator[dict, None, None]:
@@ -66,6 +68,29 @@ def nested_get_item(obj: dict, key_list: list) -> Any:
     return reduce(operator.getitem, key_list, obj)
 
 
+def json_load_local_or_s3(uri: str) -> dict:
+    """read a json from a local or s3 path
+
+    Parameters
+    ----------
+    uri: str
+        S3 URI or local filepath
+
+    Returns
+    -------
+    jobj: object
+        deserisalized ouput of json.load()
+
+    """
+    if uri.startswith("s3://"):
+        fp = s3_get_object(uri)["Body"]
+    else:
+        fp = open(uri, "r")
+    jobj = json.load(fp)
+    fp.close()
+    return jobj
+
+
 def s3_get_object(uri: str) -> dict:
     """
     Utility wrapper for calling get_object from the boto3 s3 client,
@@ -85,3 +110,26 @@ def s3_get_object(uri: str) -> dict:
     file_key = parsed_s3.path[1:]
     response = s3.get_object(Bucket=bucket, Key=file_key)
     return response
+
+
+def object_exists(bucket, key):
+    """whether an object exists in an S3 bucket
+    Parameters
+    ----------
+    bucket: str
+        name of bucket
+    key: str
+        object key. If not passed, object key will be
+        basename of the file_name
+    Returns
+    -------
+    exists : bool
+    """
+    exists = False
+    client = boto3.client('s3')
+    try:
+        client.head_object(Bucket=bucket, Key=key)
+        exists = True
+    except ClientError:
+        pass
+    return exists
