@@ -10,16 +10,23 @@ import croissant.train as train
 from croissant.features import FeatureExtractor
 import os
 import numpy as np
+from moto import mock_s3
+import boto3
+import argschema
+from urllib.parse import urlparse
+import marshmallow as mm
 
 
 @pytest.fixture()
 def train_data():
-    yield Path(__file__).parent / 'resources' / 'dev_train_rois.json'
+    tp = Path(__file__).parent / 'resources' / 'dev_train_rois.json'
+    yield str(tp)
 
 
 @pytest.fixture()
 def test_data():
-    yield Path(__file__).parent / 'resources' / 'dev_test_rois.json'
+    tp = Path(__file__).parent / 'resources' / 'dev_test_rois.json'
+    yield str(tp)
 
 
 @pytest.fixture
@@ -194,3 +201,33 @@ def test_ClassifierTrainer(train_data, test_data, tmp_path, monkeypatch):
             args['training_data'],
             args['test_data'],
             mock_classifier)
+
+
+@mock_s3
+def test_TrainingSchema():
+    test_uri = "s3://myschematest/my/file.json"
+    train_uri = "s3://myschematest/my/file2.json"
+    test_up = urlparse(test_uri)
+    train_up = urlparse(train_uri)
+    s3 = boto3.client("s3")
+    s3.create_bucket(Bucket=test_up.netloc)
+    s3.put_object(Bucket=test_up.netloc, Key=test_up.path[1:],
+                  Body=json.dumps({'a': 1}).encode('utf-8'))
+    s3.put_object(Bucket=test_up.netloc, Key=train_up.path[1:],
+                  Body=json.dumps({'a': 1}).encode('utf-8'))
+
+    args = {
+            "training_data": train_uri,
+            "test_data": test_uri
+            }
+
+    # uris exist, no errors
+    argschema.ArgSchemaParser(input_data=args,
+                              schema_type=train.TrainingSchema,
+                              args=[])
+
+    args["training_data"] = "s3://myschematest/does/not/exist.txt"
+    with pytest.raises(mm.ValidationError, match=r".*does not exist"):
+        argschema.ArgSchemaParser(input_data=args,
+                                  schema_type=train.TrainingSchema,
+                                  args=[])

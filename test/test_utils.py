@@ -2,9 +2,12 @@ import pytest
 import boto3
 from moto import mock_s3
 from botocore.exceptions import ClientError
+from urllib.parse import urlparse
+import json
 
 from croissant.utils import (nested_get_item, s3_get_object,
-                             read_jsonlines)
+                             read_jsonlines, json_load_local_or_s3,
+                             object_exists)
 
 
 @pytest.mark.parametrize(
@@ -111,3 +114,36 @@ def test_read_jsonlines_s3(body, expected):
     for record in reader:
         response.append(record)
     assert expected == response
+
+
+@mock_s3
+@pytest.mark.parametrize("expected", [{'test': 123}])
+@pytest.mark.parametrize("mode", ["local", "s3"])
+def test_json_load_local_or_s3(mode, expected, tmp_path):
+    if mode == "s3":
+        uri = "s3://myjsonbucket/my/file.json"
+        up = urlparse(uri)
+        s3 = boto3.client("s3")
+        s3.create_bucket(Bucket=up.netloc)
+        s3.put_object(Bucket=up.netloc, Key=up.path[1:],
+                      Body=json.dumps(expected).encode('utf-8'))
+    else:
+        uri = str(tmp_path / "myfile.json")
+        with open(uri, "w") as f:
+            json.dump(expected, f)
+
+    loaded = json_load_local_or_s3(uri)
+    assert loaded == expected
+
+
+@mock_s3
+def test_object_exists():
+    uri = "s3://myobjectbucket/my/file.json"
+    up = urlparse(uri)
+    s3 = boto3.client("s3")
+    s3.create_bucket(Bucket=up.netloc)
+    s3.put_object(Bucket=up.netloc, Key=up.path[1:],
+                  Body=json.dumps({'a': 1}).encode('utf-8'))
+
+    assert object_exists(up.netloc, up.path[1:])
+    assert not object_exists(up.netloc, "does/not/exist.txt")
