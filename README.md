@@ -59,7 +59,7 @@ establish a vpn connection to the AWS VPC. This example is using `openvpn` on li
 ```bash
 sudo openvpn --config .config/openvpn/mlflow_vpn_config.ovpn
 ```
-These instructions also assume that the user has the [AWS Command Line Interface](https://aws.amazon.com/cli/) installed and that it can find apprpriate credentials. We can then provide `mlflow` credentials via the AWS secret manager. This assumes the JSON processor `jq` is installed.
+These instructions also assume that the user has the [AWS Command Line Interface](https://aws.amazon.com/cli/) installed and that it can find appropriate credentials. We can then provide `mlflow` credentials via the AWS secret manager. This assumes the JSON processor `jq` is installed.
 ```
 SECRET_NAME=mlflow-stack-prod-MLFlowDbSecret
 secret=$(aws secretsmanager get-secret-value --secret-id $SECRET_NAME --query SecretString --output text) &&  USER=$(echo $secret | jq .username -r) &&   PASSWORD=$(echo $secret | jq .password -r) &&   HOST=$(echo $secret | jq .host -r) &&   PORT=$(echo $secret | jq .port -r) &&   DBNAME=$(echo $secret | jq .dbname -r)
