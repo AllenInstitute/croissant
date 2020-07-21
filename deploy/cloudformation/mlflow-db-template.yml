@@ -36,10 +36,10 @@ Parameters:
     Default: 443
     Description: Port for client VPN
   
-  SecurityGroupCIDR:
+  SecurityGroupOutboundCIDR:
     Type: String
     Default: 0.0.0.0/0
-    Description: CIDR IP to be granted access by the security group; use 0.0.0.0/0 to accept all IPs
+    Description: CIDR IP to be granted outbound access by the security group; use 0.0.0.0/0 to be open to the internet
   
   VpcCIDR:
     Type: String
@@ -59,7 +59,7 @@ Parameters:
   SubnetCIDRs:
     Type: CommaDelimitedList 
     Default: 10.0.10.0/24,10.0.11.0/24
-    Description: CIDR blocks for subsets. Can't overlap with local CIDR of VPC or VPN assignment.
+    Description: CIDR blocks for subnets. Can't overlap with local CIDR of VPC or VPN assignment.
 
 Resources:
 
@@ -136,11 +136,25 @@ Resources:
           FromPort: 22
           ToPort: 22
           SourceSecurityGroupId: !Ref VpcUserSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          Description: Access postgres ports within VPC (ingress) subnet 0
+          CidrIp: !Select
+          - 0
+          - !Ref SubnetCIDRs
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          Description: Access postgres ports within VPC (ingress) subnet 1
+          CidrIp: !Select
+          - 1
+          - !Ref SubnetCIDRs
       SecurityGroupEgress:
         - IpProtocol: udp
           FromPort: !Ref ClientVpnPort
           ToPort: !Ref ClientVpnPort
-          CidrIp: !Ref SecurityGroupCIDR
+          CidrIp: !Ref SecurityGroupOutboundCIDR
     
   PostgresVpcSecurityIngress:
     Type: AWS::EC2::SecurityGroupIngress
@@ -160,7 +174,17 @@ Resources:
       IpProtocol: tcp
       FromPort: 5432
       ToPort: 5432
-      CidrIp: !Ref SecurityGroupCIDR
+      CidrIp: !Ref SecurityGroupOutboundCIDR
+
+  PostgresVpcSecurityEgressDestinationGroup:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: Access postgres ports (egress) within same SG
+      GroupId: !Ref VpcSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      DestinationSecurityGroupId: !Ref VpcSecurityGroup
 
   VpcInternetGateway:
     Type: AWS::EC2::InternetGateway
