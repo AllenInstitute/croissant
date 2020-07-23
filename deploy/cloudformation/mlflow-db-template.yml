@@ -36,10 +36,10 @@ Parameters:
     Default: 443
     Description: Port for client VPN
   
-  SecurityGroupCIDR:
+  SecurityGroupOutboundCIDR:
     Type: String
     Default: 0.0.0.0/0
-    Description: CIDR IP to be granted access by the security group; use 0.0.0.0/0 to accept all IPs
+    Description: CIDR IP to be granted outbound access by the security group; use 0.0.0.0/0 to be open to the internet
   
   VpcCIDR:
     Type: String
@@ -59,7 +59,7 @@ Parameters:
   SubnetCIDRs:
     Type: CommaDelimitedList 
     Default: 10.0.10.0/24,10.0.11.0/24
-    Description: CIDR blocks for subsets. Can't overlap with local CIDR of VPC or VPN assignment.
+    Description: CIDR blocks for subnets. Can't overlap with local CIDR of VPC or VPN assignment.
 
 Resources:
 
@@ -109,6 +109,18 @@ Resources:
         - Key: Network
           Value: VPN Connected Subnet
 
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${StackType}.croissant-artifacts.alleninstitute.org"
+
+  VpcUserSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-users-vpce-sg"
+      GroupDescription: Security group to add individual IPs for access to instances
+      VpcId: !Ref Vpc
+
   VpcSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -119,25 +131,60 @@ Resources:
         - IpProtocol: udp
           FromPort: !Ref ClientVpnPort
           ToPort: !Ref ClientVpnPort
-          CidrIp: !Ref SecurityGroupCIDR
+          SourceSecurityGroupId: !Ref VpcUserSecurityGroup
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: !Ref SecurityGroupCIDR
+          SourceSecurityGroupId: !Ref VpcUserSecurityGroup
         - IpProtocol: tcp
           FromPort: 5432
-          ToPort: 5432      # For Postgres DB
-          CidrIp: !Ref SecurityGroupCIDR
+          ToPort: 5432
+          Description: Access postgres ports within VPC (ingress) subnet 0
+          CidrIp: !Select
+          - 0
+          - !Ref SubnetCIDRs
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          Description: Access postgres ports within VPC (ingress) subnet 1
+          CidrIp: !Select
+          - 1
+          - !Ref SubnetCIDRs
       SecurityGroupEgress:
         - IpProtocol: udp
           FromPort: !Ref ClientVpnPort
           ToPort: !Ref ClientVpnPort
-          CidrIp: !Ref SecurityGroupCIDR
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432      # For Postgres DB
-          CidrIp: !Ref SecurityGroupCIDR
+          CidrIp: !Ref SecurityGroupOutboundCIDR
+    
+  PostgresVpcSecurityIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Access postgres ports (ingress)
+      GroupId: !Ref VpcSecurityGroup
+      SourceSecurityGroupId: !Ref VpcSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+  
+  PostgresVpcSecurityEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: Access postgres ports (egress)
+      GroupId: !Ref VpcSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      CidrIp: !Ref SecurityGroupOutboundCIDR
 
+  PostgresVpcSecurityEgressDestinationGroup:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: Access postgres ports (egress) within same SG
+      GroupId: !Ref VpcSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      DestinationSecurityGroupId: !Ref VpcSecurityGroup
 
   VpcInternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -210,6 +257,7 @@ Resources:
         Description: VPN to access VPC Resources for MLFlow
         SecurityGroupIds:
           - !Ref VpcSecurityGroup
+          - !Ref VpcUserSecurityGroup
         ServerCertificateArn: !Ref ServerCertificateArn
         SplitTunnel: true
         VpcId: !Ref Vpc
@@ -293,7 +341,7 @@ Resources:
         SecretStringTemplate: '{"username": "mlflow"}'
         GenerateStringKey: "password"
         PasswordLength: 20
-        ExcludeCharacters: '"@/\'
+        ExcludePunctuation: true
       Tags:
         -
           Key: AppName

@@ -1,34 +1,34 @@
 from pathlib import Path
-import json
 import logging
-
+import marshmallow as mm
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import KFold, GridSearchCV
-from sklearn.metrics import (accuracy_score, confusion_matrix,
-                             classification_report)
+from sklearn.metrics import accuracy_score, confusion_matrix
 import mlflow
 import mlflow.sklearn
 import argschema
 import joblib
 import tempfile
 from typing import List
+from urllib.parse import urlparse
 
 from croissant.features import FeatureExtractor, feature_pipeline
+from croissant.utils import json_load_local_or_s3, object_exists
 
 
 logger = logging.getLogger('TrainClassifier')
 
 
 class TrainingSchema(argschema.ArgSchema):
-    training_data = argschema.fields.InputFile(
+    training_data = argschema.fields.Str(
         required=True,
-        description=("<stem>.json containing a list of dicts, where "
-                     "each dict can be passed into "
+        description=("s3 uri or local path, <stem>.json containing a list "
+                     "of dicts, where each dict can be passed into "
                      "RoiWithMetaData.from_dict()."))
-    test_data = argschema.fields.InputFile(
+    test_data = argschema.fields.Str(
         required=True,
-        description=("<stem>.json containing a list of dicts, where "
-                     "each dict can be passed into "
+        description=("s3 uri or local path, <stem>.json containing a list "
+                     "of dicts, where each dict can be passed into "
                      "RoiWithMetaData.from_dict()."))
     scoring = argschema.fields.List(
         argschema.fields.Str,
@@ -43,15 +43,26 @@ class TrainingSchema(argschema.ArgSchema):
         description=("metric for refitting the model. See "
                      "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html"))  # noqa
 
+    @mm.post_load
+    def validate_s3_or_input(self, data, **kwargs):
+        for k in ['training_data', 'test_data']:
+            if not data[k].startswith("s3://"):
+                argschema.fields.files.validate_input_path(data[k])
+            else:
+                uri = urlparse(data[k])
+                if not object_exists(uri.netloc, uri.path[1:]):
+                    raise mm.ValidationError(f"{uri.geturl()} does not exist")
+        return data
 
-def train_classifier(training_data_path: Path, scoring: List[str],
+
+def train_classifier(training_data_path: str, scoring: List[str],
                      refit: str) -> GridSearchCV:
     """Performs k-fold cross-validated grid search logistic regression
 
     Parameters
     ----------
-    training_data_path: Path
-        path to training data in json format
+    training_data_path: str
+        local path or s3 URI to training data in json format
     scoring: List[str]
         passed to GridSearchCV to specify tracked metrics
     refit: str
@@ -64,8 +75,8 @@ def train_classifier(training_data_path: Path, scoring: List[str],
 
     """
     logger.info('Reading training data and extracting features.')
-    with open(training_data_path, 'r') as fp:
-        training_data = json.load(fp)
+    training_data = json_load_local_or_s3(training_data_path)
+
     features = FeatureExtractor.from_list_of_dict(training_data).run()
     labels = [r['label'] for r in training_data]
 
@@ -82,17 +93,17 @@ def train_classifier(training_data_path: Path, scoring: List[str],
     return clf
 
 
-def mlflow_log_classifier(training_data_path: Path,
-                          test_data_path: Path,
+def mlflow_log_classifier(training_data_path: str,
+                          test_data_path: str,
                           clf: GridSearchCV) -> str:
     """Logs a classifier with mlflow
 
     Parameters
     ----------
-    training_data_path: Path
-        path of the training data
-    test_data_path: Path
-        path of the test data
+    training_data_path: str
+        path or URI of the training data
+    test_data_path: str
+        path or URI of the test data
     clf: GridSeachCV
         a trained classifier
 
@@ -119,11 +130,10 @@ def mlflow_log_classifier(training_data_path: Path,
         with tempfile.TemporaryDirectory() as temp_dir:
             tmp_model_path = Path(temp_dir) / "trained_model.joblib"
             joblib.dump(clf.best_estimator_, tmp_model_path)
-            mlflow.log_artifact(tmp_model_path)
+            mlflow.log_artifact(str(tmp_model_path))
 
         # run the model on test_data
-        with open(test_data_path, 'r') as fp:
-            test_data = json.load(fp)
+        test_data = json_load_local_or_s3(test_data_path)
         features = FeatureExtractor.from_list_of_dict(test_data).run()
         y_true = [r['label'] for r in test_data]
         y_pred = clf.predict(features)
@@ -132,10 +142,7 @@ def mlflow_log_classifier(training_data_path: Path,
         cmat = confusion_matrix(y_true, y_pred)
         for i in [0, 1]:
             for j in [0, 1]:
-                mlflow.log_metric(f"count_{i}_{j}", cmat[i, j])
-
-        mlflow.log_param('classification_report',
-                         classification_report(y_true, y_pred))
+                mlflow.log_metric(f"count_{i}_{j}", int(cmat[i, j]))
 
         run_id = mlrun.info.run_id
 
@@ -151,7 +158,7 @@ class ClassifierTrainer(argschema.ArgSchemaParser):
 
         # train the classifier
         clf = train_classifier(
-                training_data_path=Path(self.args['training_data']),
+                training_data_path=self.args['training_data'],
                 scoring=self.args['scoring'],
                 refit=self.args['refit'])
         self.logger.info(

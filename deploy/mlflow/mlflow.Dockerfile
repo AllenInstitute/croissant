@@ -3,6 +3,7 @@ FROM python:3.8.0
 
 RUN pip install \
     mlflow>=1.8.0 \
+    boto3 \
     psycopg2-binary
 
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \

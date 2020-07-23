@@ -6,8 +6,11 @@ dependencies:
   - pip
   - pip:
       - mlflow
+      - psycopg2-binary
+      - boto3
       - argschema==2.0.1
       - pandas>=1.0.0
       - scikit-learn>=0.23.1
       - numpy
       - scipy
+      - jsonlines
