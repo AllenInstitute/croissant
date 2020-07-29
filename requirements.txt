@@ -6,7 +6,7 @@ numpy
 scipy
 argschema==2.0.1
 setuptools
-mlflow
+mlflow==1.10.0
 tables
 boto3
 moto
