@@ -5,7 +5,7 @@ dependencies:
   - python=3.8
   - pip
   - pip:
-      - mlflow
+      - mlflow==1.10.0
       - psycopg2-binary
       - boto3
       - argschema==2.0.1
