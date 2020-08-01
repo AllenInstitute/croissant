@@ -65,6 +65,12 @@ Parameters:
     Default: 10.0.10.0/24,10.0.11.0/24
     Description: CIDR blocks for subnets. Can't overlap with local CIDR of VPC or VPN assignment.
 
+  ContainerName:
+    Type: String
+    Default: croissant-container
+    Description: Name of container for fargate usage
+
+
 Resources:
 
   Vpc:
@@ -409,8 +415,7 @@ Resources:
     Properties:
       ContainerDefinitions:
         - Image: !Ref ImageUri
-          Name: !Sub "${AWS::StackName}-container-task"
-          Name: croissant-container
+          Name: !Ref ContainerName
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -431,6 +436,18 @@ Outputs:
   VPCId:
     Description: VPCId of the newly created VPC
     Value: !Ref Vpc
+  VPCUserSecurityGroupId:
+    Description: VPCId of the user security group
+    Value: !Ref VpcUserSecurityGroup
+  FargateClusterName:
+    Description: name of fargate cluster
+    Value: !Ref Cluster
+  TaskDefinitionName:
+    Description: name of ECS task for fargate deployment
+    Value: !Ref ContainerTask
+  ContainerNameOutput:
+    Description: name of container in fargate deployment
+    Value: !Ref ContainerName
   PrivateSubnet:
     Description: SubnetId of the VPN connected subnet
     Value: !Ref PrivateSubnet
