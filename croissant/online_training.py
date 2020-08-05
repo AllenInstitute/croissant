@@ -17,14 +17,16 @@ class OnlineTrainingSchema(argschema.ArgSchema):
         allow_none=True,
         description=("The cluster name. If not provided will attempt to get "
                      "environment variable ONLINE_TRAINING_CLUSTER. See boto3 "
-                     "docs for run_task arg `cluster`"))
+                     "docs for run_task arg `cluster` "
+                     "`https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.run_task`"))  # noqa
     taskDefinition = argschema.fields.Str(
         required=True,
         default=None,
         allow_none=True,
         description=("The task definition name. If not provided will attempt "
                      "to get from environment variable ONLINE_TRAINING_TASK. "
-                     "See boto3 docs for run_task arg `taskDefinition`"))
+                     "See boto3 docs for run_task arg `taskDefinition` "
+                     "https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.run_task"))  # noqa
     container = argschema.fields.Str(
         required=True,
         default=None,
@@ -32,7 +34,8 @@ class OnlineTrainingSchema(argschema.ArgSchema):
         description=("The container name. If not provided will attempt "
                      "to get from environment variable "
                      "ONLINE_TRAINING_CONTAINER. See boto3 docs for "
-                     "run_task arg `taskDefinition`"))
+                     "run_task arg `overrides` "
+                     "https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.run_task"))  # noqa
     subnet = argschema.fields.Str(
         required=True,
         default=None,
@@ -40,7 +43,8 @@ class OnlineTrainingSchema(argschema.ArgSchema):
         description=("The subnet. If not provided, will attempt to get from "
                      "environment variable ONLINE_TRAINING_SUBNET. See boto3 "
                      "docs for run_task arg `subnets` under "
-                     "`network_configuration`)"))
+                     "`network_configuration` "
+                     "https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.run_task"))  # noqa
     securityGroup = argschema.fields.Str(
         required=True,
         default=None,
@@ -48,13 +52,15 @@ class OnlineTrainingSchema(argschema.ArgSchema):
         description=("The security group. If not provided, will attempt to "
                      "get from environment variable ONLINE_TRAINING_SECURITY. "
                      "See boto3 docs for run_task arg `securityGroups` under "
-                     "`network_configuration`)"))
+                     "`network_configuration` "
+                     "https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/ecs.html#ECS.Client.run_task"))  # noqa
     trackingURI = argschema.fields.Str(
         required=True,
         default=None,
         allow_none=True,
         description=("mlflow tracking URI. If not provided, will attempt to "
-                     "get environment variable MLFLOW_TRACKING_URI."))
+                     "get environment variable MLFLOW_TRACKING_URI. See:"
+                     "https://mlflow.org/docs/latest/cli.html#cmdoption-mlflow-run-b"))  # noqa
     training_args = argschema.fields.Str(
         required=True,
         description=("(as string) dict with keys and values to pass to the "
