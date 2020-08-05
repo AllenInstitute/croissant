@@ -4,6 +4,4 @@ conda_env: conda.yaml
 
 entry_points:
   main:
-    parameters:
-      message: {type: str, default: "Hello World"}
     command: "python -m croissant.train"
