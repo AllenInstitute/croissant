@@ -1,5 +1,11 @@
 from __future__ import annotations  # noqa
-from typing import TypedDict, Optional, List, Tuple
+import sys
+from typing import Optional, List, Tuple
+
+if sys.version_info >= (3, 8):
+    from typing import TypedDict
+else:
+    from typing_extensions import TypedDict
 
 
 class Roi(TypedDict):

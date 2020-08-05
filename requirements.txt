@@ -13,3 +13,4 @@ moto
 jsonlines
 s3fs
 psycopg2-binary
+typing_extensions
