@@ -15,6 +15,10 @@
 
 Parameters:
 
+  ImageUri:
+    Type: String
+    Description: ECS tasks should pull this docker image
+
   StackType:
     Type: String
     Description: What is the role of this stack
@@ -60,6 +64,12 @@ Parameters:
     Type: CommaDelimitedList 
     Default: 10.0.10.0/24,10.0.11.0/24
     Description: CIDR blocks for subnets. Can't overlap with local CIDR of VPC or VPN assignment.
+
+  ContainerName:
+    Type: String
+    Default: croissant-container
+    Description: Name of container for fargate usage
+
 
 Resources:
 
@@ -354,10 +364,90 @@ Resources:
       TargetId: !Ref ServerlessAuroraDb
       TargetType: AWS::RDS::DBCluster
 
+  EcsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "${AWS::StackName}-ecs"
+      RetentionInDays: 60
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub "${AWS::StackName}-fargate-cluster"
+
+  ContainerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - "ecs-tasks.amazonaws.com"
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: ContainerBucketReadWrite
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                  - "s3:PutObject"
+                Resource:
+                  - "arn:aws:s3:::prod.slapp.alleninstitute.org/*"
+                  - "arn:aws:s3:::prod.croissant-artifacts.alleninstitute.org/*"
+        - PolicyName: ContainerExecutionPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ecr:GetAuthorizationToken"
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:GetDownloadUrlForLayer"
+                  - "ecr:BatchGetImage"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "*"
+
+  ContainerTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        - Image: !Ref ImageUri
+          Name: !Ref ContainerName
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub "${AWS::StackName}-ecs"
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: croissant-container
+
+      Cpu: 4096
+      ExecutionRoleArn: !GetAtt ContainerExecutionRole.Arn
+      TaskRoleArn: !GetAtt ContainerExecutionRole.Arn
+      Family: container-task
+      Memory: 16384
+      RequiresCompatibilities:
+        - FARGATE
+      NetworkMode: awsvpc
+
 Outputs:
   VPCId:
     Description: VPCId of the newly created VPC
     Value: !Ref Vpc
+  VPCUserSecurityGroupId:
+    Description: VPCId of the user security group
+    Value: !Ref VpcUserSecurityGroup
+  FargateClusterName:
+    Description: name of fargate cluster
+    Value: !Ref Cluster
+  TaskDefinitionName:
+    Description: name of ECS task for fargate deployment
+    Value: !Ref ContainerTask
+  ContainerNameOutput:
+    Description: name of container in fargate deployment
+    Value: !Ref ContainerName
   PrivateSubnet:
     Description: SubnetId of the VPN connected subnet
     Value: !Ref PrivateSubnet

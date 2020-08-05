@@ -70,6 +70,15 @@ jobs:
               -P refit=roc_auc \
               -P log_level=INFO
 
+  docker:
+    machine: true
+    steps:
+      - checkout
+      - run: echo "$DOCKER_PASS" | docker login --username $DOCKER_USER --password-stdin
+      - run: docker build --build-arg MYBRANCH=${CIRCLE_BRANCH} -t alleninstitutepika/croissant:${CIRCLE_SHA1} docker/
+      - run: docker run --entrypoint /bin/bash alleninstitutepika/croissant:${CIRCLE_SHA1} -c "conda run -n myenv pytest"
+      - run: docker push alleninstitutepika/croissant:${CIRCLE_SHA1}
+
 orbs:
   python: circleci/python@0.1
 version: 2.1
@@ -82,3 +91,12 @@ workflows:
           requires:
             - build
             - lint
+      - docker:
+          requires:
+            - build
+            - lint
+          filters:
+            branches:
+              only:
+                - master
+                - /.*docker.*/
