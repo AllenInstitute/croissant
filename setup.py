@@ -34,10 +34,11 @@ setup(
       packages=find_packages(),
       setup_requires=['setuptools_scm'],
       install_requires=required,
-      python_requires='>=3.8',
+      python_requires='>=3.7.7',
       classifiers=[
           "Development Status :: 3 - Alpha",
           "Intended Audience :: Science/Research",
+          "Programming Language :: Python :: 3.7.7"
           "Programming Language :: Python :: 3.8"
       ]
 )
