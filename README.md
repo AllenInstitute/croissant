@@ -77,4 +77,39 @@ export MYEXPERIMENT=example_aws_experiment
 The create experiment and run commands are the same as above. `--backend local` is telling `mlflow` to run the processing on the local machine. This repo also supports S3 URIs for the training and test data sources.
 
 ### AWS-hosted mlflow backend, AWS-hosted processing
-Not yet implemented. Coming soon.
+The [AWS Cloudformation](https://aws.amazon.com/cloudformation/) stack described in `deploy/cloudformation/mlflow-db-template.yml` establishes resources for [AWS Fargate](https://aws.amazon.com/fargate/) tasks. These are mlflow training tasks run in serverless containers via the client command line. The image for the containers is auto-built and deployed to [DockerHub](https://hub.docker.com/r/alleninstitutepika/croissant) with images tagged by git commit hash. The cloudformation stack can be refreshed for a new image tag like:
+```
+aws cloudformation deploy \
+  --template-file ./deploy/cloudformation/mlflow-db-template.yml \
+  --stack-name mlflow-test-stack \
+  --parameter-overrides ImageUri=docker.io/alleninstitutepika/croissant:da75ca5fdac9f7e857662fd48e0776ed3628dbeb \
+  --capabilities CAPABILITY_NAMED_IAM
+```
+
+Launching a Fargate task requires knowledge of various AWS resource names, the Mlflow backend URI, and an appropriate Mlflow experiment. The `croissant.online_training_helper` is here to help:
+```
+$ python -m croissant.online_training_helper --stack mlflow-test-stack
+INFO:root:ENV variables to use stack mlflow-test-stack
+
+export ONLINE_TRAINING_CLUSTER=mlflow-test-stack-fargate-cluster
+export ONLINE_TRAINING_TASK=arn:aws:ecs:us-west-2:606907419058:task-definition/container-task:14
+export ONLINE_TRAINING_CONTAINER=croissant-container
+export ONLINE_TRAINING_SUBNET=<subnet Id>
+export ONLINE_TRAINING_SECURITY=<security group Id>
+export MLFLOW_TRACKING_URI=postgresql://<user>:<password>@<host>:<port>/<dbname>
+
+INFO:root:Available experiments with s3 artifact stores:
+
+export MLFLOW_EXPERIMENT=example_aws_experiment
+```
+
+The above are suggestions made by the helper. Taking the suggestions and executing these export statements makes running the online training tasks quite simple (though tedious arg-by-arg specification of all the resources is still possible):
+```
+python -m croissant.online_training \
+  --output_json ./output.json \
+  --training_args.training_data s3://prod.slapp.alleninstitute.org/merged_2line_2project/training_data.json \
+  --training_args.test_data s3://prod.slapp.alleninstitute.org/merged_2line_2project/testing_data.json \
+  --training_args.log_level INFO
+```
+
+Once launched, these tasks can be tracked n the AWS console `ECS -> Cluster -> Tasks` where the cluster name is based on the cloudformation stack name. For example `mlflow-test-stack-fargate-cluster `. The logs of the job can be found from `Cloudwatch -> Logs -> LogGroups` and the log group will also be named based on the stack name, for example `mlflow-test-stack-ecs `.
