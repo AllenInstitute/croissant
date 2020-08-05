@@ -2,7 +2,7 @@ import boto3
 import os
 import argschema
 import marshmallow as mm
-import json
+from croissant.train import TrainingSchema
 
 
 class OnlineTrainingException(Exception):
@@ -61,13 +61,10 @@ class OnlineTrainingSchema(argschema.ArgSchema):
         description=("mlflow tracking URI. If not provided, will attempt to "
                      "get environment variable MLFLOW_TRACKING_URI. See:"
                      "https://mlflow.org/docs/latest/cli.html#cmdoption-mlflow-run-b"))  # noqa
-    training_args = argschema.fields.Str(
+    training_args = argschema.fields.Nested(
+        TrainingSchema,
         required=True,
-        description=("(as string) dict with keys and values to pass to the "
-                     "container-hosted croissant training module. Will be "
-                     "parsed inside the container against "
-                     "`croissant.train.TrainingSchema`. Proper CLI quote "
-                     "formatting: --training_args '{\"arg1\": \"val1\", }'"))
+        description="nested croissant.train.TrainingSchema")
     experiment_name = argschema.fields.Str(
         required=True,
         default=None,
@@ -116,9 +113,11 @@ class OnlineTraining(argschema.ArgSchemaParser):
         command = ["--backend", "local", "--experiment-name",
                    self.args['experiment_name']]
         # format the training args so mlflow passes them through to the module
-        for k, v in json.loads(self.args['training_args']).items():
-            command.append("-P")
-            command.append(f"{k}={v}")
+        for k, v in self.args['training_args'].items():
+            # we're passing explicit args to the container
+            if k not in ['input_json', 'output_json']:
+                command.append("-P")
+                command.append(f"{k}={v}")
 
         response = client.run_task(
             cluster=self.args['cluster'],

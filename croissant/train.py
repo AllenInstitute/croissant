@@ -1,6 +1,5 @@
 from pathlib import Path
 import logging
-import marshmallow as mm
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import KFold, GridSearchCV
 from sklearn.metrics import accuracy_score, confusion_matrix
@@ -10,10 +9,9 @@ import argschema
 import joblib
 import tempfile
 from typing import List
-from urllib.parse import urlparse
 
 from croissant.features import FeatureExtractor, feature_pipeline
-from croissant.utils import json_load_local_or_s3, object_exists
+from croissant.utils import json_load_local_or_s3
 
 
 logger = logging.getLogger('TrainClassifier')
@@ -24,12 +22,16 @@ class TrainingSchema(argschema.ArgSchema):
         required=True,
         description=("s3 uri or local path, <stem>.json containing a list "
                      "of dicts, where each dict can be passed into "
-                     "RoiWithMetaData.from_dict()."))
+                     "RoiWithMetaData.from_dict(). "
+                     "Note: not validated except as str to support this "
+                     "schema on remote clients."))
     test_data = argschema.fields.Str(
         required=True,
         description=("s3 uri or local path, <stem>.json containing a list "
                      "of dicts, where each dict can be passed into "
-                     "RoiWithMetaData.from_dict()."))
+                     "RoiWithMetaData.from_dict()."
+                     "Note: not validated except as str to support this "
+                     "schema on remote clients."))
     scoring = argschema.fields.List(
         argschema.fields.Str,
         required=False,
@@ -42,17 +44,6 @@ class TrainingSchema(argschema.ArgSchema):
         default='roc_auc',
         description=("metric for refitting the model. See "
                      "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html"))  # noqa
-
-    @mm.post_load
-    def validate_s3_or_input(self, data, **kwargs):
-        for k in ['training_data', 'test_data']:
-            if not data[k].startswith("s3://"):
-                argschema.fields.files.validate_input_path(data[k])
-            else:
-                uri = urlparse(data[k])
-                if not object_exists(uri.netloc, uri.path[1:]):
-                    raise mm.ValidationError(f"{uri.geturl()} does not exist")
-        return data
 
 
 def train_classifier(training_data_path: str, scoring: List[str],

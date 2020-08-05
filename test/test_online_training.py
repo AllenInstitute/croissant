@@ -13,9 +13,13 @@ def test_online_training_schema(tmp_path):
     os.environ["MLFLOW_EXPERIMENT"] = "abcdef98765"
 
     outj = tmp_path / "output.json"
+    training_args = {
+            "training_data": "some string",
+            "test_data": "some other string"
+            }
     args = {
             "output_json": str(outj),
-            "training_args": '{"arg1": "val1", "arg2": "val2"}',
+            "training_args": training_args,
             "cluster": "mycluster",
             "taskDefinition": "mycluster",
             "container": "mycontainer",
@@ -37,9 +41,13 @@ def test_online_training_schema_exception(tmp_path):
         tmp_env_var = os.environ.pop("MLFLOW_EXPERIMENT")
 
     outj = tmp_path / "output.json"
+    training_args = {
+            "training_data": "some string",
+            "test_data": "some other string"
+            }
     args = {
             "output_json": str(outj),
-            "training_args": '{"arg1": "val1", "arg2": "val2"}',
+            "training_args": training_args,
             "cluster": "mycluster",
             "taskDefinition": "mycluster",
             "container": "mycontainer",
@@ -56,9 +64,13 @@ def test_online_training_schema_exception(tmp_path):
 
 def test_online_training(tmp_path, monkeypatch):
     outj = tmp_path / "output.json"
+    training_args = {
+            "training_data": "some string",
+            "test_data": "some other string"
+            }
     args = {
             "output_json": str(outj),
-            "training_args": '{"arg1": "val1", "arg2": "val2"}',
+            "training_args": training_args,
             "cluster": "mycluster",
             "taskDefinition": "mycluster",
             "container": "mycontainer",
