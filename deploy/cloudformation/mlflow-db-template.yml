@@ -70,7 +70,6 @@ Parameters:
     Default: croissant-container
     Description: Name of container for fargate usage
 
-
 Resources:
 
   Vpc:
@@ -396,7 +395,7 @@ Resources:
                   - "s3:PutObject"
                 Resource:
                   - "arn:aws:s3:::prod.slapp.alleninstitute.org/*"
-                  - "arn:aws:s3:::prod.croissant-artifacts.alleninstitute.org/*"
+                  - !Sub "arn:aws:s3:::${StackType}.croissant-artifacts.alleninstitute.org/*"
         - PolicyName: ContainerExecutionPolicy
           PolicyDocument:
             Statement:
