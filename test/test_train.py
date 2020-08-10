@@ -83,13 +83,6 @@ def mlflow_client(experiment_name, tmp_path):
 
     mlflow run reads the tracking URI from the env variable
     MLFLOW_TRACKING_URI
-        experiment_name = "myexperiment"
-        artifact_uri = str(tmp_path / "artifacts")
-        tracking_uri = str(tmp_path / "tracking")
-        os.environ['MLFLOW_TRACKING_URI'] = str(tracking_uri)
-        mlflow.create_experiment(
-                experiment_name, artifact_location=artifact_uri)
-        mlflow.set_experiment(experiment_name)
     """
     experiment_name = experiment_name
     artifact_uri = str(tmp_path / "artifacts")
