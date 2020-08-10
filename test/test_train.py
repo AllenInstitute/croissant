@@ -7,7 +7,6 @@ from unittest.mock import MagicMock
 
 import pytest
 import mlflow
-# import mlflow.sklearn
 from moto import mock_s3
 import boto3
 import argschema

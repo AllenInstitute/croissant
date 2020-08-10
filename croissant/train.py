@@ -48,11 +48,15 @@ class KFoldTuner(object):
     with a default parameter space to search, subclass this class.
     """
     def __init__(
-            self, X: Iterable, y: Iterable,
-            classifier: Type[BaseEstimator], param_space: Iterable,
-            pipeline: Pipeline = None, n_splits: int = 5,
-            scorer: Union[str, Callable] = "roc_auc", seed: int = 42,
-            opt_algo: Callable = None):
+            self, X: Iterable,
+            y: Iterable,
+            classifier: Type[BaseEstimator],
+            param_space: dict,
+            pipeline: Optional[Pipeline] = None,
+            n_splits: int = 5,
+            scorer: Union[str, Callable] = "roc_auc",
+            seed: int = 42,
+            opt_algo: Optional[Callable] = None):
         """
         Parameters
         ----------
@@ -63,7 +67,7 @@ class KFoldTuner(object):
         classifier: Type[BaseEstimator]
             A scikit-learn classifier class. Should be able to be
             instantiated from params in the param space.
-        param_space: Iterable
+        param_space: dict
             The sampling space for parameter search. Should evaluate
             to a pyll graph. See
             http://hyperopt.github.io/hyperopt/getting-started/search_spaces/
@@ -98,11 +102,13 @@ class KFoldTuner(object):
 
     @staticmethod
     def _objective(
-            params: dict = None, *, n_splits: int = 5,
-            classifier: Type[BaseEstimator] = None,
-            pipeline: Pipeline = None,
-            X: Iterable = None, y: Iterable = None,
-            scorer: Union[str, Callable] = None,
+            params: dict,
+            *,
+            n_splits: int = 5,
+            classifier: Type[BaseEstimator],
+            pipeline: Optional[Pipeline] = None,
+            X: Iterable, y: Iterable,
+            scorer: Union[str, Callable],
             low_good: bool = True) -> dict:
         """
         Evaluate performance of a single model in a hyperopt trial.
@@ -237,8 +243,17 @@ class RandomForestTuner(KFoldTuner):
     """Special case of KFoldTuner with RandomForestClassifier and a
     default parameter space option.
     See KFoldTuner for more information."""
-    def __init__(self, X, y, pipeline, param_space=None, opt_algo=None,
-                 n_splits=5, scorer="roc_auc", seed=42, n_jobs=1):
+    def __init__(
+            self,
+            X: Iterable,
+            y: Iterable,
+            pipeline: Optional[Pipeline],
+            param_space: Optional[dict] = None,
+            opt_algo: Optional[Callable] = None,
+            n_splits: int = 5,
+            scorer: Union[str, Callable] = "roc_auc",
+            seed: int = 42,
+            n_jobs: int = 1):
         """
         Parameters
         ----------
@@ -253,7 +268,7 @@ class RandomForestTuner(KFoldTuner):
             An optional Pipeline. Will use to preprocess data, and
             append the classifier to the end of the Pipeline.
             Will not search for hyperparameters to tune in the Pipeline.
-        param_space: Iterable
+        param_space: dict
             The sampling space for parameter search. Should evaluate
             to a pyll graph. See
             http://hyperopt.github.io/hyperopt/getting-started/search_spaces/
@@ -287,8 +302,17 @@ class LogisticRegressionTuner(KFoldTuner):
     """Special case of KFoldTuner with LogisticRegression and a
         default parameter space option.
         See KFoldTuner for more information."""
-    def __init__(self, X, y, pipeline, param_space=None, opt_algo=None,
-                 n_splits=5, scorer="roc_auc", seed=42, n_jobs=1):
+    def __init__(
+            self,
+            X: Iterable,
+            y: Iterable,
+            pipeline: Optional[Pipeline],
+            param_space: Optional[dict] = None,
+            opt_algo: Optional[Callable] = None,
+            n_splits: int = 5,
+            scorer: Union[str, Callable] = "roc_auc",
+            seed: int = 42,
+            n_jobs: int = 1):
         """
         Parameters
         ----------
@@ -303,7 +327,7 @@ class LogisticRegressionTuner(KFoldTuner):
             An optional Pipeline. Will use to preprocess data, and
             append the classifier to the end of the Pipeline.
             Will not search for hyperparameters to tune in the Pipeline.
-        param_space: Iterable
+        param_space: dict
             The sampling space for parameter search. Should evaluate
             to a pyll graph. See
             http://hyperopt.github.io/hyperopt/getting-started/search_spaces/
@@ -375,7 +399,7 @@ def train_classifier(model: str,
                      test_metrics: Optional[List[str]] = None,
                      n_folds: int = 5,
                      seed: int = 42,
-                     refit: bool = True) -> Pipeline:
+                     refit: bool = True):
     """Tunes and trains a model using hyperopt to optimize
     hyperparameters. Internally uses k-fold cross validation to
     compute optimization metrics. Uses `feature_pipeline` to
@@ -391,11 +415,9 @@ def train_classifier(model: str,
         local path or s3 URI to training data in json format
     test_data_path: str
         local path or s3 URI to training data in json format
-    scorer: str or Callable
-        A str (see sklearn model evaluation documentation) or a
-        scorer callable object / function with signature
-        scorer(estimator, X, y) which should return only a single
-        value. Will optimize for this scorer.
+    scorer: str
+        A str (see sklearn model evaluation documentation).
+        Will optimize for this scorer.
     max_iter: int
         Maximum number of iterations to evaluate hyperparameters
     optimizer: str
@@ -414,8 +436,20 @@ def train_classifier(model: str,
 
     Returns
     -------
-    Pipeline
-        the trained model, in a Pipeline object
+    4-tuple of:
+        Pipeline
+            the trained model, in a Pipeline object
+        Optimized metric score (cross-validated)
+            A tuple of (<scorer_name>, <scores>). The scores are for
+            each fold in the training data.
+        Test metrics
+            A dictionary of score_name: score_value. These scores
+            are computed on the test set only.
+        confusion matrix
+            A confusion matrix in dictionary format with the following
+            keys: "TN", "TP", "FN", "FP" (corresponding to
+            "true negative", "true positive", "false negative",
+            "false positive", respectively).
 
     """
     logger.info("Reading training data and extracting features.")
@@ -480,7 +514,7 @@ def mlflow_log_classifier(training_data_path: str,
                           clf: GridSearchCV,
                           cv_scores: tuple,
                           metrics: Optional[dict] = None,
-                          confusion_matrix: Optional[np.ndarray] = None,
+                          confusion_matrix: Optional[dict] = None,
                           tags: Optional[dict] = None) -> str:
     """Logs a classifier with mlflow.
 
