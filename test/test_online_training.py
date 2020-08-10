@@ -5,7 +5,14 @@ import pytest
 import os
 
 
-def test_online_training_schema(tmp_path):
+@pytest.fixture()
+def temp_file(tmp_path):
+    fp = tmp_path / "hello.txt"
+    fp.write_text("hello world")
+    yield str(fp)
+
+
+def test_online_training_schema(tmp_path, temp_file):
     tmp_env_var = None
     if "MLFLOW_EXPERIMENT" in os.environ.keys():
         tmp_env_var = os.environ.pop("MLFLOW_EXPERIMENT")
@@ -14,8 +21,8 @@ def test_online_training_schema(tmp_path):
 
     outj = tmp_path / "output.json"
     training_args = {
-            "training_data": "some string",
-            "test_data": "some other string"
+            "training_data": temp_file,
+            "test_data": temp_file,
             }
     args = {
             "output_json": str(outj),
@@ -35,15 +42,15 @@ def test_online_training_schema(tmp_path):
         os.environ["MLFLOW_EXPERIMENT"] = tmp_env_var
 
 
-def test_online_training_schema_exception(tmp_path):
+def test_online_training_schema_exception(tmp_path, temp_file):
     tmp_env_var = None
     if "MLFLOW_EXPERIMENT" in os.environ.keys():
         tmp_env_var = os.environ.pop("MLFLOW_EXPERIMENT")
 
     outj = tmp_path / "output.json"
     training_args = {
-            "training_data": "some string",
-            "test_data": "some other string"
+            "training_data": temp_file,
+            "test_data": temp_file,
             }
     args = {
             "output_json": str(outj),
@@ -62,11 +69,11 @@ def test_online_training_schema_exception(tmp_path):
         os.environ["MLFLOW_EXPERIMENT"] = tmp_env_var
 
 
-def test_online_training(tmp_path, monkeypatch):
+def test_online_training(tmp_path, temp_file, monkeypatch):
     outj = tmp_path / "output.json"
     training_args = {
-            "training_data": "some string",
-            "test_data": "some other string"
+            "training_data": temp_file,
+            "test_data": temp_file,
             }
     args = {
             "output_json": str(outj),
