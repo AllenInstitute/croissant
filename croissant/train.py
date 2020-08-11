@@ -504,6 +504,7 @@ def train_classifier(model: str,
 
     # Refit on full data if applicable
     if refit:
+        logger.info("Refitting model with all data.")
         full_features = pd.concat([features, test_features], axis=0)
         full_labels = labels + test_labels
         pipeline.fit(full_features, full_labels)
