@@ -74,9 +74,7 @@ jobs:
               --experiment-name ${MYEXPERIMENT} \
               -P training_data=$PWD/test/resources/dev_train_rois.json \
               -P test_data=$PWD/test/resources/dev_test_rois.json \
-              -P scoring="['roc_auc']" \
-              -P refit=roc_auc \
-              -P log_level=INFO
+              -P max_iter=10
 
   docker:
     machine: true
