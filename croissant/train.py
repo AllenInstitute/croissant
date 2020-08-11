@@ -17,7 +17,7 @@ import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import KFold, GridSearchCV, cross_val_score
+from sklearn.model_selection import KFold, cross_val_score
 from sklearn.metrics import confusion_matrix, get_scorer
 from sklearn.base import clone, BaseEstimator
 import sklearn
