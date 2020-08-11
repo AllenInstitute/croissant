@@ -386,8 +386,9 @@ def _binary_confusion_dict(
         raise ValueError(
             "Must have binary labels for confusion matrix dictionary.")
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
-    return {f"{prefix}TN": tn, f"{prefix}FP": fp,
-            f"{prefix}FN": fn, f"{prefix}TP": tp}
+    # Casting to int to avoid numpy types (don't play nice with postgres)
+    return {f"{prefix}TN": int(tn), f"{prefix}FP": int(fp),
+            f"{prefix}FN": int(fn), f"{prefix}TP": int(tp)}
 
 
 def train_classifier(model: str,
