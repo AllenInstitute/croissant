@@ -511,7 +511,7 @@ def train_classifier(model: str,
 
 def mlflow_log_classifier(training_data_path: str,
                           test_data_path: str,
-                          clf: GridSearchCV,
+                          clf: Pipeline,
                           cv_scores: tuple,
                           metrics: Optional[dict] = None,
                           confusion_matrix: Optional[dict] = None,
@@ -528,8 +528,8 @@ def mlflow_log_classifier(training_data_path: str,
         Tuple of (<score name>, <scores per fold>) for optimization
         metric (training data). Encouraged by scikit-learn's model
         persistence page to ensure reproducibility.
-    clf: GridSeachCV
-        a trained classifier
+    clf: Pipeline
+        a Pipeline containing a trained classifier as the final step.
     metrics: dict
         Optional dictionary of {<score name>, <value>} for scored
         metrics on test data.
@@ -572,6 +572,9 @@ def mlflow_log_classifier(training_data_path: str,
         tmp_model_path = Path(temp_dir) / "trained_model.joblib"
         joblib.dump(clf, tmp_model_path)
         mlflow.log_artifact(str(tmp_model_path))
+
+    # log model parameters
+    mlflow.log_params(clf.steps[-1][1].get_params())
 
     # Log confusion matrix
     if confusion_matrix is not None:
