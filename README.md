@@ -113,3 +113,13 @@ python -m croissant.online_training \
 ```
 
 Once launched, these tasks can be tracked n the AWS console `ECS -> Cluster -> Tasks` where the cluster name is based on the cloudformation stack name. For example `mlflow-test-stack-fargate-cluster `. The logs of the job can be found from `Cloudwatch -> Logs -> LogGroups` and the log group will also be named based on the stack name, for example `mlflow-test-stack-ecs `.
+
+The container image that is run above is specified at cloudformation stack creation time, or via a stack deployment changeset application. We can also dynamically supply a container image on the command line. This can be helpful for quicker development iteration. In this case, a new task definition for ECS will be created and run, rather than the existing stack-defined task defintion. The additional argument is `container_image`:
+```
+python -m croissant.online_training \
+  --output_json ./output.json \
+  --training_args.training_data s3://prod.slapp.alleninstitute.org/merged_2line_2project/training_data.json \
+  --training_args.test_data s3://prod.slapp.alleninstitute.org/merged_2line_2project/testing_data.json \
+  --training_args.log_level INFO \
+  --container_image docker.io/alleninstitutepika/croissant:7ca6c6968866ad1b545df5c8dc92544809864413
+```
