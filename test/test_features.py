@@ -21,8 +21,8 @@ def basic_data():
             [1, 1, 1], [2, 2, 2],
         ],
         [   # metadata
-            {"genotype": "you", "rig": "up"},
-            {"rig": "down", "genotype": "you"},
+            {"genotype": "you"},
+            {"genotype": "you"},
         ]
     )
 
@@ -148,7 +148,7 @@ def test_roi_width(roi, expected):
     ]
 )
 def test_neighborhood_info(roi, expected):
-    actual = fx._feat_neighborhood_info(roi)
+    actual = fx._neighborhood_info(roi)
     for ix, val in enumerate(expected):
         assert val == actual[ix]
 
@@ -291,9 +291,10 @@ def test_feat_fns_by_source(sources, expected, function_class):
 @pytest.mark.parametrize(
     "xs, fns, expected",
     [
-        ([1], (lambda x: 3,), [(3,)],),
+        ([1], (lambda x: "3a",), [("3a",)],),
         ([], (lambda x: 1,), [],),
-        ([1, 2, 3], (lambda x: x*2, lambda x: x), [(2, 1), (4, 2), (6, 3)],),
+        ([1, 2, 3], (lambda x: (x*2, 1), lambda x: x),
+         [(2, 1, 1), (4, 1, 2), (6, 1, 3)],),
     ]
 )
 def test_apply_fns(xs, fns, expected):
@@ -330,6 +331,9 @@ def test_feature_extractor_run(MockFeatureExtractor, monkeypatch, basic_data):
         mock_fx, "_feat_fns_by_source",
         lambda *args, **kwargs: {"roi": ["_testfeat_roi1", "_testfeat_roi2"],
                                  "trace": ["_testfeat_trace"]})
+    monkeypatch.setattr(
+        mock_fx, "_run_special_features",
+        lambda: pd.DataFrame({"rig": ["up", "down"]}))
     expected = pd.DataFrame(
         [["never", "gonna", "give", "you", "up"],
          ["never", "gonna", "let", "you", "down"]],

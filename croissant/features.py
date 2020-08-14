@@ -249,10 +249,10 @@ class FeatureExtractor:
         return skew(roi.data)
 
     @staticmethod
-    def _feat_neighborhood_info(roi: coo_matrix):
-        """Return information about neighbors. Since computing a kdtree
-        can be expensive, return all these features at once instead of
-        recomputing.
+    def _neighborhood_info(roi: coo_matrix):
+        """Return information about pixel "neighbors". Since computing
+        a kdtree can be expensive, return all these features at once
+        instead of recomputing.
 
         Returns a tuple of the following information (Computed for each
         mask pixel and aggregated):
@@ -267,6 +267,22 @@ class FeatureExtractor:
         dist_tuple = neighbor_extractor.neighbor_dist(1)
         adjacency_tuple = neighbor_extractor.adjacent_pixels()
         return tuple([*dist_tuple, *adjacency_tuple])
+
+    def _run_special_features(self):
+        """
+        Separate call for special features that don't play nice with the
+        automated apply function, because they return more than one
+        value. Kept separate from `run` to keep it cleaner, since it's
+        the main entry point.
+        """
+        # Add special features that don't play nice with automation
+        neighbor_cols = ["avg_dist_nn", "std_dist_nn", "skew_dist_nn",
+                         "avg_adjacent_n", "std_adjacent_n", "skew_adjacent_n"]
+
+        neighborhood_features = pd.DataFrame(self._apply_functions(
+            self.rois, self._neighborhood_info), columns=neighbor_cols)
+
+        return neighborhood_features
 
     def run(self) -> pd.DataFrame:
         """
@@ -303,8 +319,13 @@ class FeatureExtractor:
                  for d in zip(roi_data, trace_data)),
             columns=feature_fns_dict["roi"] + feature_fns_dict["trace"])
 
-        # Add metadata
-        features = pd.concat([extracted_features, self.metadata], axis=1)
+        # Feature callables that return more than one value and have
+        # to be handled specially
+        special_features = self._run_special_features()
+
+        # Combine all features
+        features = pd.concat(
+            [extracted_features, self.metadata, special_features], axis=1)
 
         # Take sorted columns so that ordering is deterministic
         features = features[sorted(list(features))]
@@ -367,7 +388,8 @@ class FeatureExtractor:
             An iterable of input data, such as a numpy array
         fns: Callable
             Functions to apply to each member in the iterable `xs`.
-            Should take a single argument and return a single value.
+            Should take a single argument and return a single value,
+            or a tuple of values to be unpacked.
         Returns
         -------
         List of tuples; values of the tuples are from applying each
@@ -375,7 +397,19 @@ class FeatureExtractor:
         """
         records = []
         for y in xs:
-            records.append(tuple((fn(y) for fn in fns)))
+            results = []
+            for fn in fns:
+                result = fn(y)
+                # Don't want to unpack strings into characters...
+                if isinstance(result, str):
+                    results.append((result,))
+                else:
+                    try:
+                        results.append(tuple(result))
+                    except TypeError:
+                        results.append((result,))
+            records.append(tuple(chain.from_iterable(results)))
+
         return records
 
 
