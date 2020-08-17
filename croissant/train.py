@@ -400,7 +400,8 @@ def train_classifier(model: str,
                      test_metrics: Optional[List[str]] = None,
                      n_folds: int = 5,
                      seed: int = 42,
-                     refit: bool = True):
+                     refit: bool = True,
+                     drop_cols: List[str] = None):
     """Tunes and trains a model using hyperopt to optimize
     hyperparameters. Internally uses k-fold cross validation to
     compute optimization metrics. Uses `feature_pipeline` to
@@ -462,7 +463,7 @@ def train_classifier(model: str,
     test_labels = [r["label"] for r in test_data]
 
     # Instantiate model and (static) preprocessing pipeline
-    pipeline = feature_pipeline()
+    pipeline = feature_pipeline(drop_cols=drop_cols)
     tuner_cls = TrainingSchema.MODEL_CHOICES[model]
     optimizer = TrainingSchema.OPTIMIZER_CHOICES[optimizer]
     tuner = tuner_cls(features, labels, pipeline, n_splits=n_folds,
@@ -651,6 +652,12 @@ class TrainingSchema(argschema.ArgSchema):
         validate=lambda x: x > 0,
         description="Number of folds for k-fold cross-validation."
     )
+    drop_cols = argschema.fields.List(
+        argschema.fields.Str,
+        missing=None,
+        cli_as_single_argument=True,
+        description=("Feature columns to drop from the input data.")
+    )
 
     @mm.post_load
     def validate_s3_or_input(self, data, **kwargs):
@@ -691,7 +698,8 @@ class ClassifierTrainer(argschema.ArgSchemaParser):
                 test_metrics=self.args["reported_metrics"],
                 n_folds=self.args["n_folds"],
                 seed=self.args["seed"],
-                refit=self.args["refit"])
+                refit=self.args["refit"],
+                drop_cols=self.args["drop_cols"])
 
         # log the training
         run_id = mlflow_log_classifier(

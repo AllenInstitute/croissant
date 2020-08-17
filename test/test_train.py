@@ -96,10 +96,13 @@ def mlflow_client(experiment_name, tmp_path):
 
 
 @pytest.mark.parametrize(
+    "drop_cols", [None, ["full_genotype"]]
+)
+@pytest.mark.parametrize(
     "model", ["RandomForestClassifier", "LogisticRegression"]
 )
 def test_train_classifier_binary_preds(
-        model, train_data, test_data, tmp_path):
+        model, train_data, test_data, drop_cols, tmp_path):
     """tests that `train_classifier()` generates a classifier that
     makes binary predictions.
     """
@@ -111,7 +114,8 @@ def test_train_classifier_binary_preds(
         max_iter=2,
         optimizer="rand",
         n_folds=2,
-        refit=True)
+        refit=True,
+        drop_cols=drop_cols)
 
     # load testing roi and generate input features
     with open(test_data, 'r') as open_testing:
@@ -302,12 +306,11 @@ def test_ClassifierTrainer(train_data, test_data, tmp_path, monkeypatch):
         "refit": True,
         "seed": 99,
         "optimizer": "rand",
-        "n_folds": 3
+        "n_folds": 3,
+        "drop_cols": ["full_genotype"]
     }
 
     mock_classifier = MagicMock()
-    # mock_classifier.best_score_ = "a good score"
-    # mock_classifier.best_params_ = "some good params"
     mock_train_classifier = MagicMock(
         return_value=(
             mock_classifier,
@@ -341,7 +344,8 @@ def test_ClassifierTrainer(train_data, test_data, tmp_path, monkeypatch):
             test_metrics=args["reported_metrics"],
             n_folds=args["n_folds"],
             seed=args["seed"],
-            refit=args["refit"]
+            refit=args["refit"],
+            drop_cols=args["drop_cols"]
     )
 
     mock_mlflow_log_classifier.assert_called_once_with(
