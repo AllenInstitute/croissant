@@ -61,6 +61,13 @@ class OnlineTrainingSchema(argschema.ArgSchema):
         description=("mlflow tracking URI. If not provided, will attempt to "
                      "get environment variable MLFLOW_TRACKING_URI. See:"
                      "https://mlflow.org/docs/latest/cli.html#cmdoption-mlflow-run-b"))  # noqa
+    container_image = argschema.fields.Str(
+        required=False,
+        description=("if provided, will define a task to run using this str "
+                     "as the image specification for the task definition. "
+                     "An example format of this str is: "
+                     "'docker.io/alleninstitutepika/croissant:<tag>'. See: "
+                     "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#container_definition_image"))  # noqa
     training_args = argschema.fields.Nested(
         TrainingSchema,
         required=True,
@@ -119,10 +126,40 @@ class OnlineTraining(argschema.ArgSchemaParser):
                 command.append("-P")
                 command.append(f"{k}={v}")
 
+        task_def_arn = self.args['taskDefinition']
+        container_name = self.args['container']
+
+        # dynamically specifying a different container requires
+        # defining a new ECS task
+        if "container_image" in self.args:
+            # duplicate key parameters from stack-defined task
+            task = client.describe_task_definition(
+                    taskDefinition=self.args['taskDefinition'])
+            taskdef = task['taskDefinition']
+            cdefs = taskdef['containerDefinitions']
+            assert len(cdefs) == 1
+
+            # set the image and a new name
+            cdefs[0]['image'] = self.args['container_image']
+            cdefs[0]['name'] = 'dynamic-container'
+            response = client.register_task_definition(
+                    family="dynamic-image",
+                    taskRoleArn=taskdef['taskRoleArn'],
+                    executionRoleArn=taskdef['executionRoleArn'],
+                    containerDefinitions=cdefs,
+                    cpu=taskdef['cpu'],
+                    memory=taskdef['memory'],
+                    requiresCompatibilities=['FARGATE'],
+                    networkMode='awsvpc')
+
+            task_def_arn = response['taskDefinition']['taskDefinitionArn']
+            container_name = \
+                response['taskDefinition']['containerDefinitions'][0]['name']
+
         response = client.run_task(
             cluster=self.args['cluster'],
             launchType="FARGATE",
-            taskDefinition=self.args['taskDefinition'],
+            taskDefinition=task_def_arn,
             networkConfiguration={
                 "awsvpcConfiguration": {
                     "subnets": [self.args['subnet']],
@@ -131,7 +168,7 @@ class OnlineTraining(argschema.ArgSchemaParser):
             overrides={
                 "containerOverrides": [
                     {
-                        "name": self.args['container'],
+                        "name": container_name,
                         "command": command,
                         "environment": [
                             {
