@@ -1,5 +1,5 @@
 from __future__ import annotations  # noqa
-from typing import Union, List, Dict, Any, Callable, Iterable
+from typing import Union, List, Dict, Any, Callable, Iterable, Tuple
 from functools import partial
 import inspect
 from itertools import chain
@@ -19,12 +19,30 @@ from croissant.utils import is_prefixed_function_or_method
 
 class NeighborhoodInfo(object):
     """Bundle the KDTree queries"""
-    def __init__(self, roi):
+    def __init__(self, roi: coo_matrix):
+        """
+        Parameters
+        ----------
+        roi: coo_matrix
+            An ROI in coo format
+        """
         self.coords = list(zip(roi.col, roi.row))
         self.tree = KDTree(np.array(self.coords), leaf_size=10)
 
-    def neighbor_dist(self, n=1):
-        """n-nearest neighbors (not including itself)"""
+    def neighbor_dist(self, n: int = 1) -> Tuple[float]:
+        """Compute statistics about n-nearest pixel neighbors (not
+        including itself).
+        Parameters
+        ----------
+        n: int
+            The degree of distance from self. n=1 gets the nearest
+            neighbor, n=2 gets the two nearest, etc.
+        Returns
+        -------
+        Tuple[float]
+            Tuple of mean, std, and skew of the distance to the `n`
+            nearest pixel neighbors, for each pixel in the ROI
+        """
         # Avoid ValueError if there's only one data point
         if len(self.coords) == 1:
             return (0, 0, 0)
@@ -32,9 +50,16 @@ class NeighborhoodInfo(object):
         near_dist = [d[1] for d in dist]
         return np.mean(near_dist), np.std(near_dist), skew(near_dist)
 
-    def adjacent_pixels(self):
-        """number of adjacent pixels (including diagonal)
-        Simple, will 'double-count'"""
+    def adjacent_pixels(self) -> Tuple[float]:
+        """Compute the number of adjacent pixels (including diagonal).
+        Simple implementation, will 'double-count' when computing for
+        adjacent pixels.
+        Returns
+        -------
+        Tuple[float]
+            Tuple of mean, std, and skew of the number of adjacent
+            pixels (including diagonal) for each pixel in the ROI
+        """
         ind = self.tree.query_radius(self.coords, r=1.42)
         vec_len = np.vectorize(len)
         n_neighbors = vec_len(ind) - 1    # Don't want itself as a neighbor
@@ -222,34 +247,34 @@ class FeatureExtractor:
         return (trace > threshold).sum()
 
     @staticmethod
-    def _feat_last_tenth_trace_skew(trace: np.ndarray):
+    def _feat_last_tenth_trace_skew(trace: np.ndarray) -> float:
         """Compute the skew for the last tenth of the data.
         This roughly corresponds to the 'fingerprint stimulus'
         at the end."""
         return skew(trace[-len(trace)//10:])
 
     @staticmethod
-    def _feat_roi_width(roi: coo_matrix):
+    def _feat_roi_width(roi: coo_matrix) -> int:
         """Maximum size of the ROI along the x axis."""
         return np.ptp(roi.col) + 1
 
     @staticmethod
-    def _feat_roi_height(roi: coo_matrix):
+    def _feat_roi_height(roi: coo_matrix) -> int:
         """Maximum size of the ROI along the y axis."""
         return np.ptp(roi.row) + 1
 
     @staticmethod
-    def _feat_roi_data_std(roi: coo_matrix):
+    def _feat_roi_data_std(roi: coo_matrix) -> float:
         """Standard deviation of the weighted mask data."""
         return np.std(roi.data)
 
     @staticmethod
-    def _feat_roi_data_skew(roi: coo_matrix):
+    def _feat_roi_data_skew(roi: coo_matrix) -> float:
         """Skew of the weighted mask data."""
         return skew(roi.data)
 
     @staticmethod
-    def _neighborhood_info(roi: coo_matrix):
+    def _neighborhood_info(roi: coo_matrix) -> Tuple[float]:
         """Return information about pixel "neighbors". Since computing
         a kdtree can be expensive, return all these features at once
         instead of recomputing.
@@ -268,12 +293,12 @@ class FeatureExtractor:
         adjacency_tuple = neighbor_extractor.adjacent_pixels()
         return tuple([*dist_tuple, *adjacency_tuple])
 
-    def _run_special_features(self):
+    def _run_special_features(self) -> pd.DataFrame:
         """
         Separate call for special features that don't play nice with the
         automated apply function, because they return more than one
         value. Kept separate from `run` to keep it cleaner, since it's
-        the main entry point.
+        the main entry point. Returns a dataframe of features.
         """
         # Add special features that don't play nice with automation
         neighbor_cols = ["avg_dist_nn", "std_dist_nn", "skew_dist_nn",
@@ -334,8 +359,10 @@ class FeatureExtractor:
         return features
 
     @staticmethod
-    def _feat_fns_by_source(obj: Any,
-                            sources: List = ["roi", "trace", "metadata"]):
+    def _feat_fns_by_source(
+            obj: Any,
+            sources: List[str] = ["roi", "trace", "metadata"]
+            ) -> Dict[str, List[str]]:
         """
         This internal method is a helper function to get all the
         functions prefixed with "_feat_" in this class (FeatureExtractor),
