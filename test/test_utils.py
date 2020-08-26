@@ -7,7 +7,15 @@ import json
 
 from croissant.utils import (nested_get_item, s3_get_object,
                              read_jsonlines, json_load_local_or_s3,
-                             object_exists)
+                             object_exists, is_prefixed_function_or_method)
+
+
+@pytest.fixture
+def function_factory(request):
+    def fn():
+        pass
+    fn.__name__ = request.param
+    yield fn
 
 
 @pytest.mark.parametrize(
@@ -147,3 +155,50 @@ def test_object_exists():
 
     assert object_exists(up.netloc, up.path[1:])
     assert not object_exists(up.netloc, "does/not/exist.txt")
+
+
+@pytest.mark.parametrize(
+    "function_factory, prefix, expected",
+    [
+        ("i_deleted_these_files_the_first_time_on_accident", "i_", True),
+        ("dont_git_co_dot_instead_of_git_add_dot", "nope", False),
+    ],
+    indirect=["function_factory"])
+def test_is_prefixed_function_or_method_works_functions(
+        function_factory, prefix, expected):
+    assert expected == is_prefixed_function_or_method(
+        function_factory, prefix=prefix)
+
+
+@pytest.mark.parametrize(
+    "obj, prefix, expected",
+    [
+        ("doing it again", "doing", False),
+        (lambda x: "hope I can git add like a normal human", "hope", False),
+    ]
+)
+def test_is_prefixed_function_or_method_works_other_objects(
+        obj, prefix, expected):
+    assert expected == is_prefixed_function_or_method(obj, prefix=prefix)
+
+
+def test_is_prefixed_function_works_methods():
+    class MyClass:
+        @staticmethod
+        def these_functions():
+            pass
+
+        @classmethod
+        def were_less_salty(cls):
+            pass
+
+        def the_first_time(self):
+            pass
+
+    mc = MyClass()
+    assert is_prefixed_function_or_method(mc.these_functions, "the")
+    assert is_prefixed_function_or_method(mc.were_less_salty, "were_")
+    assert is_prefixed_function_or_method(mc.the_first_time, prefix="the_")
+    assert not is_prefixed_function_or_method(mc.were_less_salty, "pls")
+    assert not is_prefixed_function_or_method(mc.these_functions, "git")
+    assert not is_prefixed_function_or_method(mc.the_first_time, "why")

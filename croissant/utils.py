@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 from pathlib import Path
 import jsonlines
 import json
+import inspect
 from botocore.exceptions import ClientError
 
 
@@ -133,3 +134,17 @@ def object_exists(bucket, key):
     except ClientError:
         pass
     return exists
+
+
+def is_prefixed_function_or_method(obj: Any, prefix: str = ""):
+    """
+    Returns true if the object is a method/function and the name
+    of the object starts with `prefix`, otherwise returns False.
+    """
+    try:
+        if ((inspect.ismethod(obj) or inspect.isfunction(obj)) and
+                obj.__name__.startswith(prefix)):
+            return True
+    except AttributeError:
+        pass
+    return False
