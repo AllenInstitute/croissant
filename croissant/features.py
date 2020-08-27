@@ -3,9 +3,11 @@ from typing import Union, List, Dict, Any, Callable, Iterable, Tuple
 from functools import partial
 import inspect
 from itertools import chain
+import warnings
 
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import FunctionTransformer
 from sklearn.compose import ColumnTransformer
 from sklearn.neighbors import KDTree
 from scipy.sparse import coo_matrix
@@ -440,7 +442,39 @@ class FeatureExtractor:
         return records
 
 
-def feature_pipeline() -> Pipeline:
+def ignore_col(df: pd.DataFrame, *, cols_to_ignore: List[str]) -> pd.DataFrame:
+    """
+    A wrapper around Pandas' DataFrame.drop method. Used to safely
+    drop columns of a DataFrame and raise an warning if any of the
+    specified columns are not in the DataFrame. This is used in
+    feature_pipeline to get the returned pipeline to ignore certain columns.
+
+    Parameters
+    ----------
+    df: pd.DataFrame
+        The dataframe
+    cols_to_ignore: List[str]
+        A list of columns to drop from the DataFrame.
+
+    Returns
+    -------
+    pd.DataFrame
+        The same DataFrame form the arguments, but without the columns
+        specified in cols_to_ignore.
+    """
+    df_cols = df.columns.tolist()
+
+    if not set(cols_to_ignore).issubset(df_cols):
+        warnings.warn("Could not drop the following columns to ignore"
+                      "as they don't exist in the DataFrame: "
+                      f"{set(cols_to_ignore).difference(df_cols)}")
+        cols_to_ignore = list(
+            set(df_cols).intersection(cols_to_ignore)
+        )
+    return df.drop(columns=cols_to_ignore)
+
+
+def feature_pipeline(drop_cols: List[str] = None) -> Pipeline:
     """
     Create Pipeline to process extracted features from FeatureExtractor.
     Should be kept in sync with the supported features in
@@ -452,18 +486,38 @@ def feature_pipeline() -> Pipeline:
         rig
     Include all other columns as numerical features.
 
+    Parameters
+    ----------
+    drop_cols: List[str]
+        A list of columns for the pipeline to ignore when fitting.
+
     Returns
     -------
     Pipeline
         Unfitted pipeline to process features extracted from
         FeatureExtractor.
     """
+    drop_cols = [] if drop_cols is None else drop_cols
+
     categorical_cols = ["full_genotype", "targeted_structure", "rig"]
+    # Remove dropped columns from the list of categorical columns
+    categorical_cols = list(
+        set(categorical_cols).difference(
+            set(categorical_cols).intersection(drop_cols)))
+
     column_transformer = ColumnTransformer(
         transformers=[
             ("onehot_cat", OneHotEncoder(drop="if_binary"), categorical_cols)
         ],
         remainder="passthrough")
-    feature_pipeline = Pipeline(
-        steps=[("onehot", column_transformer)])
+
+    function_transformer = FunctionTransformer(
+        func=ignore_col,
+        kw_args={"cols_to_ignore": drop_cols}
+    )
+    steps = [("onehot", column_transformer)]
+    if drop_cols:
+        # Want to drop first if we're doing it
+        steps.insert(0, ("drop_cols", function_transformer))
+    feature_pipeline = Pipeline(steps=steps)
     return feature_pipeline

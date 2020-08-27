@@ -6,6 +6,7 @@ from typing import Any
 import pandas as pd
 
 from croissant.features import FeatureExtractor as fx
+from croissant.features import ignore_col
 
 
 @pytest.fixture
@@ -342,4 +343,55 @@ def test_feature_extractor_run(MockFeatureExtractor, monkeypatch, basic_data):
         index=[867, 5309]
     )
     actual = mock_fx.run()
+    pd.testing.assert_frame_equal(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "df, col_to_ignore, expected",
+    [
+        (pd.DataFrame({"abc": [1, 2, 3],
+                       "difficulty": ["it's", "easy", "as"]}),
+         ["abc"],
+         pd.DataFrame({"difficulty": ["it's", "easy", "as"]}))
+    ]
+)
+def test_ignore_col_ignores_existing_col(df, col_to_ignore, expected):
+    actual = ignore_col(df, cols_to_ignore=col_to_ignore)
+    pd.testing.assert_frame_equal(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "df, cols_to_ignore, expected",
+    [
+        (pd.DataFrame({"abc": [1, 2, 3],
+                       "difficulty": ["it's", "easy", "as"],
+                       "song": ["do", "re", "mi"]}),
+         ["abc", "difficulty"],
+         pd.DataFrame({"song": ["do", "re", "mi"]})),
+    ]
+)
+def test_ignore_col_ignores_multiple_cols(df, cols_to_ignore, expected):
+    actual = ignore_col(df, cols_to_ignore=cols_to_ignore)
+    pd.testing.assert_frame_equal(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "df, cols_to_ignore, expected",
+    [
+        (pd.DataFrame({"abc": [1, 2, 3],
+                       "difficulty": ["it's", "easy", "as"],
+                       "song": ["do", "re", "mi"]}),
+         ["abc", "michael"],
+         pd.DataFrame({"difficulty": ["it's", "easy", "as"],
+                       "song": ["do", "re", "mi"]})),
+    ]
+)
+def test_ignore_col_raises_warning_nonexistent(df, cols_to_ignore, expected):
+    with pytest.warns(UserWarning) as record:
+        actual = ignore_col(df, cols_to_ignore=cols_to_ignore)
+
+        assert len(record) == 1
+        assert record[0].message.args[0] == (
+            "Could not drop the following columns to ignore"
+            "as they don't exist in the DataFrame: {'michael'}")
     pd.testing.assert_frame_equal(expected, actual)
