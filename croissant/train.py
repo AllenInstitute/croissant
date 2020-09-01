@@ -453,6 +453,18 @@ def train_classifier(model: str,
             "true negative", "true positive", "false negative",
             "false positive", respectively).
 
+    Notes
+    -----
+    When training a model for inference in the Allen Institute's production
+    ophys pipeline, the data fed to FeatureExtractor should match between
+    here and the production pipeline inference using the model:
+    https://github.com/AllenInstitute/ophys_etl_pipelines/blob/37a03ec8d944b688c75da73e201824627d7f7df9/src/ophys_etl/transforms/classification.py#L426-L439  # noqa
+    One consideration is that the production inference currently downsamples
+    traces from 31Hz to 4Hz.
+    Another consideration is the format. This training is written to use
+    the FeatureExtractor.from_list_of_dict() method, while production
+    inference uses the default constructor.
+
     """
     logger.info("Reading training data and extracting features.")
     training_data = json_load_local_or_s3(training_data_path)
