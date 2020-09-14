@@ -16,3 +16,4 @@ psycopg2-binary
 typing_extensions
 hyperopt
 hpsklearn
+scikit-image

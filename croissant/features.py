@@ -1,5 +1,5 @@
 from __future__ import annotations  # noqa
-from typing import Union, List, Dict, Any, Callable, Iterable, Tuple
+from typing import Union, List, Dict, Any, Callable, Iterable, Tuple, Optional
 from functools import partial
 import inspect
 from itertools import chain
@@ -12,6 +12,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.neighbors import KDTree
 from scipy.sparse import coo_matrix
 from scipy.stats import skew
+from skimage.measure import moments_hu, moments_central, moments_normalized
 import numpy as np
 import pandas as pd
 
@@ -73,16 +74,17 @@ class FeatureExtractor:
     """
     def __init__(self,
                  rois: Union[List[Roi], List[coo_matrix]],
-                 dff_traces: List[List[float]],
+                 f_traces: List[List[float]],
                  metadata: List[RoiMetadata],
+                 np_traces: Optional[List[List[float]]] = None,
                  id_col: str = "id",
                  spike_stddev_threshold: float = 2.5):
         """
-        Each index in rois, dff_traces, and metadata should correspond
+        Each index in rois, f_traces, and metadata should correspond
         to the same index in the other sources. That is, the roi mask
         in `rois[0]` should be associated with the trace in
-        `dff_traces[0]` and the metadata in `metadata[0]`. That also
-        means that `rois`, `dff_traces`, and `metadata` should all be
+        `f_traces[0]` and the metadata in `metadata[0]`. That also
+        means that `rois`, `f_traces`, and `metadata` should all be
         the same length.
 
         It is optional to provide an ID for an ROI data point, if using
@@ -112,8 +114,11 @@ class FeatureExtractor:
             A list of ROI masks, where each mask is represented as
             either a coo_matrix, or a dictionary with the schema
             defined in `Roi`.
-        dff_traces: List[List[float]]
-            A list of dff_traces for each ROI in `rois`.
+        f_traces: List[List[float]]
+            A list of fluorescence traces for each ROI in `rois`.
+        np_traces: List[List[float]]
+            A list of neuropil fluorescence traces for each ROI in
+            `rois`.
         metadata: List[RoiMetadata]
             A list of metadata dicts for each ROI in `rois`, with the
             schema described in `RoiMetadata`.
@@ -128,14 +133,18 @@ class FeatureExtractor:
         Raises
         ------
         ValueError
-            If the length of `rois`, `dff_traces`, and `metadata`
+            If the length of `rois`, `f_traces`, and `metadata`
             are not all equal.
         """
-        if not (len(rois) == len(dff_traces) == len(metadata)):
-            raise ValueError("`rois`, `dff_traces`, and `metadata` must be "
+        if not (len(rois) == len(f_traces) == len(metadata)):
+            raise ValueError("`rois`, `f_traces`, and `metadata` must be "
                              f"equal length. `rois`: {len(rois)}, "
-                             f"`dff_traces`: {len(dff_traces)}, "
+                             f"`f_traces`: {len(f_traces)}, "
                              f"`metadata`: {len(metadata)}.")
+        if (np_traces is not None) and (len(np_traces) != len(f_traces)):
+            raise ValueError(("`f_traces` and `np_traces` must be "
+                              f"equal length. `f_traces`: {len(f_traces)}, "
+                              f"`np_traces`: {len(np_traces)}"))
         roi_ids = []
         coo_rois = []
         if isinstance(rois[0], dict):    # Convert Roi data to coo_matrix
@@ -152,7 +161,12 @@ class FeatureExtractor:
             coo_rois = rois
 
         self.rois = coo_rois
-        self.dff_traces = dff_traces
+        self.f_traces = f_traces        # ROI fluorescence traces
+        self.np_traces = np_traces      # neuropil fluorescence traces
+        self.f_minus_np_traces = None
+        if self.np_traces is not None:
+            self.f_minus_np_traces = (np.array(self.f_traces)
+                                      - np.array(self.np_traces))
         self.roi_ids = roi_ids
         self.metadata = pd.DataFrame.from_records(metadata)
 
@@ -161,8 +175,11 @@ class FeatureExtractor:
 
     @classmethod
     def from_list_of_dict(
-            self, data: List[Dict[str, Any]]) -> FeatureExtractor:  # noqa
+            self, data: List[Dict[str, Any]], id_col: str = None,
+            spike_stddev_threshold: float = 2.5) -> FeatureExtractor:  # noqa
         """constructs FeatureExtractor from a list of dictionaries
+        See FeatureExtractor.__init__ for explanation of additional
+        parameters.
 
         Parameters
         ----------
@@ -179,7 +196,13 @@ class FeatureExtractor:
         rois = [r.roi for r in roi_list]
         traces = [r.trace for r in roi_list]
         metas = [r.roi_meta for r in roi_list]
-        return FeatureExtractor(rois=rois, dff_traces=traces, metadata=metas)
+        if "np_trace" in data[0].keys():
+            np_traces = [r.np_trace for r in roi_list]
+        else:
+            np_traces = None
+        return FeatureExtractor(rois=rois, f_traces=traces, metadata=metas,
+                                np_traces=np_traces, id_col=id_col,
+                                spike_stddev_threshold=spike_stddev_threshold)
 
     @staticmethod
     def _feat_ellipticalness(roi: coo_matrix) -> float:
@@ -295,6 +318,49 @@ class FeatureExtractor:
         adjacency_tuple = neighbor_extractor.adjacent_pixels()
         return tuple([*dist_tuple, *adjacency_tuple])
 
+    @staticmethod
+    def _feat_max_to_avg_f_ratio(trace: np.ndarray) -> float:
+        """Return the ratio of the maximum value of the trace to the
+        average value of the trace."""
+        return np.nanmax(trace)/np.nanmean(trace)
+
+    @staticmethod
+    def _feat_max_to_avg_f_minus_np_ratio(f_minus_np: np.ndarray) -> float:
+        """Return the ratio of the maximum value of the neuropil-subtracted
+        trace to the average value of the neuropil-subtracted trace.
+        Separated from _feat_max_to_avg_f_ratio for feature naming and
+        automation."""
+        return FeatureExtractor._feat_max_to_avg_f_ratio(f_minus_np)
+
+    @staticmethod
+    def _feat_compactness(roi: coo_matrix) -> float:
+        """Returns the number of 'filled-in' pixels over the area of the
+        bounding box."""
+        pixels = FeatureExtractor._feat_area(roi)
+        height = FeatureExtractor._feat_roi_height(roi)
+        width = FeatureExtractor._feat_roi_width(roi)
+        return pixels / (height * width)
+
+    @staticmethod
+    def _hu_moments(roi: coo_matrix) -> np.ndarray:
+        """Returns the 7 Hu moments for an ROI image. See 
+        https://scikit-image.org/docs/0.17.x/api/skimage.measure.html#moments-hu        # noqa
+        for more information.
+
+        Returns
+        -------
+        7-element, 1d np.array of Hu's image moments
+
+        References
+        ----------
+        M. K. Hu, “Visual Pattern Recognition by Moment Invariants”, 
+        IRE Trans. Info. Theory, vol. IT-8, pp. 179-187, 1962
+        """
+        roi_image = roi.toarray()
+        mu = moments_central(roi_image)
+        nu = moments_normalized(mu)
+        return moments_hu(nu)
+
     def _run_special_features(self) -> pd.DataFrame:
         """
         Separate call for special features that don't play nice with the
@@ -305,11 +371,14 @@ class FeatureExtractor:
         # Add special features that don't play nice with automation
         neighbor_cols = ["avg_dist_nn", "std_dist_nn", "skew_dist_nn",
                          "avg_adjacent_n", "std_adjacent_n", "skew_adjacent_n"]
+        hu_cols = [f"hu{i}" for i in range(7)]
 
         neighborhood_features = pd.DataFrame(self._apply_functions(
             self.rois, self._neighborhood_info), columns=neighbor_cols)
-
-        return neighborhood_features
+        hu_features = pd.DataFrame(self._apply_functions(
+            self.rois, self._hu_moments), columns=hu_cols)
+        all_features = pd.concat([neighborhood_features, hu_features], axis=1)
+        return all_features
 
     def run(self) -> pd.DataFrame:
         """
@@ -334,17 +403,29 @@ class FeatureExtractor:
             sorted order.
         """
         feature_fns_dict = self._feat_fns_by_source(
-            self, sources=["roi", "trace"])
+            self, sources=["roi", "trace", "np_trace", "f_minus_np"])
         roi_data = self._apply_functions(
             self.rois,
             *[getattr(self, call) for call in feature_fns_dict["roi"]])
         trace_data = self._apply_functions(
-            self.dff_traces,
+            self.f_traces,
             *[getattr(self, call) for call in feature_fns_dict["trace"]])
+        feature_cols = feature_fns_dict["roi"] + feature_fns_dict["trace"]
+
+        # Optional neuropil-subtracted trace features
+        if self.f_minus_np_traces is not None:
+            np_sub_data = self._apply_functions(
+                self.f_minus_np_traces,
+                *[getattr(self, call) for call in
+                  feature_fns_dict["f_minus_np"]])
+            data_iterable = zip(roi_data, trace_data, np_sub_data)
+            feature_cols.extend(feature_fns_dict["f_minus_np"])
+        else:
+            data_iterable = zip(roi_data, trace_data)
+
         extracted_features = pd.DataFrame(
-            list(tuple(chain.from_iterable(d))
-                 for d in zip(roi_data, trace_data)),
-            columns=feature_fns_dict["roi"] + feature_fns_dict["trace"])
+            list(tuple(chain.from_iterable(d)) for d in data_iterable),
+            columns=feature_cols)
 
         # Feature callables that return more than one value and have
         # to be handled specially
