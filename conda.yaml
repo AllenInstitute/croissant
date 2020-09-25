@@ -16,3 +16,4 @@ dependencies:
       - jsonlines
       - hyperopt
       - hpsklearn
+      - scikit-image

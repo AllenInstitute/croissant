@@ -395,3 +395,26 @@ def test_ignore_col_raises_warning_nonexistent(df, cols_to_ignore, expected):
             "Could not drop the following columns to ignore"
             "as they don't exist in the DataFrame: {'michael'}")
     pd.testing.assert_frame_equal(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "trace, expected",
+    [
+        (np.ones((10,)), 1.0),
+        (np.array([1, 1, 1, 1, 3, 3, 3, 3]), 3/2),
+    ]
+)
+def test_feat_max_to_avg_f_ratio(trace, expected):
+    assert fx._feat_max_to_avg_f_ratio(trace) == expected
+    assert fx._feat_max_to_avg_f_minus_np_ratio(trace) == expected
+
+
+@pytest.mark.parametrize(
+    "roi, expected",
+    [
+        (coo_matrix(np.array([[0, 1, 0], [1, 1, 1]])), 4/6),
+        (coo_matrix(np.array([1])), 1),
+    ]
+)
+def test_feat_compactness(roi, expected):
+    assert fx._feat_compactness(roi) == expected
