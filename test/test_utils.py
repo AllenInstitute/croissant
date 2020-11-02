@@ -4,10 +4,12 @@ from moto import mock_s3
 from botocore.exceptions import ClientError
 from urllib.parse import urlparse
 import json
+import os.path
 
 from croissant.utils import (nested_get_item, s3_get_object,
                              read_jsonlines, json_load_local_or_s3,
-                             object_exists, is_prefixed_function_or_method)
+                             object_exists, is_prefixed_function_or_method,
+                             json_write_local_or_s3)
 
 
 @pytest.fixture
@@ -142,6 +144,25 @@ def test_json_load_local_or_s3(mode, expected, tmp_path):
 
     loaded = json_load_local_or_s3(uri)
     assert loaded == expected
+
+
+@mock_s3
+@pytest.mark.parametrize("mode", ["local", "s3"])
+def test_json_write_local_or_s3(mode, tmp_path):
+    data = {"a": 1}
+    if mode == "s3":
+        uri = "s3://myjsonbucket/my/file.json"
+        up = urlparse(uri)
+        s3 = boto3.client("s3", region_name="us-east-1")
+        s3.create_bucket(Bucket=up.netloc)
+        json_write_local_or_s3(data, uri)
+        assert object_exists(up.netloc, up.path[1:])
+        assert data == json_load_local_or_s3(uri)
+    else:
+        json_write_local_or_s3(data, str(tmp_path / "file.json"))
+        assert os.path.exists(str(tmp_path / "file.json"))
+        with open(str(tmp_path / "file.json"), "r") as f:
+            assert data == json.load(f)
 
 
 @mock_s3

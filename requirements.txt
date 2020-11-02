@@ -17,3 +17,4 @@ typing_extensions
 hyperopt
 hpsklearn
 scikit-image
+h5py
