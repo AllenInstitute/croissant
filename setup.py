@@ -33,9 +33,7 @@ setup(
       url="https://github.com/AllenInstitute/croissant",
       packages=find_packages(),
       setup_requires=['setuptools_scm'],
-      install_requires=required + [
-          'lims @ git+https://github.com/AllenInstitute/simple-lims-connection'
-      ],
+      install_requires=required,
       python_requires='>=3.7.7',
       classifiers=[
           "Development Status :: 3 - Alpha",
