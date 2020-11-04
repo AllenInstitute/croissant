@@ -151,10 +151,11 @@ class AnnotationIngestJobInput(argschema.ArgSchema):
     # annotations_key = argschema.fields.Str(
     #     required=False,
     #     default=None,
-    #     description=("If applicable, the key in the record that contains the "
-    #                  "list of individual worker annotations (as dict records)."
-    #                  " Used to provide additional descriptive statistics "
-    #                  "about worker decisions."))
+    #     description=(
+    #       "If applicable, the key in the record that contains the "
+    #       "list of individual worker annotations (as dict records)."
+    #       " Used to provide additional descriptive statistics "
+    #       "about worker decisions."))
     label_map = argschema.fields.Dict(
         required=False,
         missing=None,

@@ -72,7 +72,7 @@ def test_annotation_job_schema_make_objects(
     """Test that the objects are properly loaded and turned into
     appropriate objects."""
     input_dict = {"slapp_upload_manifest_path": upload_manifest,
-                  "annotation_output_location": str(tmp_path),
+                  "annotation_output_manifest": str(tmp_path),
                   "labeling_project_key": "astley",
                   "annotation_id_key": "id",
                   "output_location": str(tmp_path)}
@@ -81,5 +81,3 @@ def test_annotation_job_schema_make_objects(
             schema_type=AnnotationIngestJobInput,
             input_data=input_dict, args=[])
         assert "manifest_data" in result.args
-
-

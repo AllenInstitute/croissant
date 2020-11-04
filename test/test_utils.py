@@ -63,7 +63,7 @@ def test_nested_get_item_fails_with_empty_list(d, keys):
 @mock_s3
 def test_s3_get_object():
     # Set up the fake bucket and object
-    s3 = boto3.client("s3")
+    s3 = boto3.client("s3", region_name="us-east-1")
     s3.create_bucket(Bucket="mybucket")
     body = b'{"a": 1}\n{"b": 2}'
     s3.put_object(Bucket="mybucket", Key="my/file.json",
@@ -76,7 +76,7 @@ def test_s3_get_object():
 @mock_s3
 def test_s3_fails_not_exist():
     # Set up the fake bucket and object
-    s3 = boto3.client("s3")
+    s3 = boto3.client("s3", region_name="us-east-1")
     s3.create_bucket(Bucket="mybucket")
     body = b'{"a": 1}\n{"b": 2}'
     s3.put_object(Bucket="mybucket", Key="my/file.json",
@@ -115,8 +115,8 @@ def test_read_jsonlines_file(tmp_path, body, expected):
     ]
 )
 def test_read_jsonlines_s3(body, expected):
-    s3 = boto3.client("s3")
-    s3.create_bucket(Bucket="mybucket")
+    s3 = boto3.client("s3", region_name="us-east-1")
+    s3.create_bucket(Bucket="mybucket",)
     s3.put_object(Bucket="mybucket", Key="my/file.json",
                   Body=body)
     reader = read_jsonlines("s3://mybucket/my/file.json")
@@ -133,7 +133,7 @@ def test_json_load_local_or_s3(mode, expected, tmp_path):
     if mode == "s3":
         uri = "s3://myjsonbucket/my/file.json"
         up = urlparse(uri)
-        s3 = boto3.client("s3")
+        s3 = boto3.client("s3", region_name="us-east-1")
         s3.create_bucket(Bucket=up.netloc)
         s3.put_object(Bucket=up.netloc, Key=up.path[1:],
                       Body=json.dumps(expected).encode('utf-8'))
@@ -169,7 +169,7 @@ def test_json_write_local_or_s3(mode, tmp_path):
 def test_object_exists():
     uri = "s3://myobjectbucket/my/file.json"
     up = urlparse(uri)
-    s3 = boto3.client("s3")
+    s3 = boto3.client("s3", region_name="us-east-1")
     s3.create_bucket(Bucket=up.netloc)
     s3.put_object(Bucket=up.netloc, Key=up.path[1:],
                   Body=json.dumps({'a': 1}).encode('utf-8'))

@@ -125,11 +125,11 @@ def json_write_local_or_s3(obj, uri: str):
 
 
 def path_join_s3_os(path: str, to_join: str) -> str:
-    """Analogous to os.path.join that works regardless of for s3 
+    """Analogous to os.path.join that works regardless of for s3
     or file system. The format doesn't matter for Unix machines since
     both the web and file system use '/', but does matter for Windows
     since paths use '\'.
-    
+
     Parameters
     ----------
     path: str
