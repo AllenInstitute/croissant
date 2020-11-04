@@ -17,3 +17,5 @@ typing_extensions
 hyperopt
 hpsklearn
 scikit-image
+h5py
+lims @ git+https://github.com/AllenInstitute/simple-lims-connection

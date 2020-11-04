@@ -364,7 +364,7 @@ def s3_file():
     mock = mock_s3()
     mock.start()
     test_up = urlparse(file_uri)
-    s3 = boto3.client("s3")
+    s3 = boto3.client("s3", region_name="us-east-1")
     s3.create_bucket(Bucket=test_up.netloc)
     resp = s3.put_object(Bucket=test_up.netloc, Key=test_up.path[1:],
                          Body=json.dumps({'a': 1}).encode('utf-8'))
