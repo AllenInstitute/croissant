@@ -322,8 +322,8 @@ class AnnotationIngestJob(argschema.ArgSchemaParser):
         train, test = train_test_split(
             annotations, test_size=self.args["test_split"], shuffle=True)
         # Save s3 or local storage
-        json_write_local_or_s3(train.to_json(orient="records"), train_path)
-        json_write_local_or_s3(test.to_json(orient="records"), test_path)
+        json_write_local_or_s3(train.to_dict(orient="records"), train_path)
+        json_write_local_or_s3(test.to_dict(orient="records"), test_path)
 
         self.logger.info(f"Wrote data to {train_path} and {test_path}.")
         self.output({
