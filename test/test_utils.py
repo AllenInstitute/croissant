@@ -5,11 +5,12 @@ from botocore.exceptions import ClientError
 from urllib.parse import urlparse
 import json
 import os.path
+import numpy as np
 
 from croissant.utils import (nested_get_item, s3_get_object,
                              read_jsonlines, json_load_local_or_s3,
                              object_exists, is_prefixed_function_or_method,
-                             json_write_local_or_s3)
+                             json_write_local_or_s3, _munge_traces, downsample)
 
 
 @pytest.fixture
@@ -223,3 +224,59 @@ def test_is_prefixed_function_works_methods():
     assert not is_prefixed_function_or_method(mc.were_less_salty, "pls")
     assert not is_prefixed_function_or_method(mc.these_functions, "git")
     assert not is_prefixed_function_or_method(mc.the_first_time, "why")
+
+
+@pytest.mark.parametrize("roi_data, trace_file_fixture, expected", [
+    # Case: ROI id order in segmentation output matches trace "roi_names" order
+    ([{"id": 10}, {"id": 100}, {"id": 20}, {"id": 200}, {"id": 3}],  # roi_data
+     {"trace_data": np.arange(100).reshape((5, 20)),  # trace_file_fixture
+      "trace_names": ['10', '100', '20', '200', '3']},
+     np.arange(100).reshape((5, 20))),  # expected
+
+    # Case: ROI id order does not match order of trace "roi_names" (variant 1)
+    ([{"id": 10}, {"id": 100}, {"id": 20}, {"id": 200}, {"id": 3}],
+     {"trace_data": np.arange(100).reshape((5, 20)),
+      "trace_names": ['100', '20', '10', '200', '3']},
+     np.arange(100).reshape((5, 20))[[2, 0, 1, 3, 4]]),
+
+    # Case: ROI id order does not match order of trace "roi_names" (variant 2)
+    ([{"id": 3}, {"id": 20}, {"id": 10}, {"id": 200}, {"id": 100}],
+     {"trace_data": np.arange(100).reshape((5, 20)),
+      "trace_names": ['10', '100', '20', '200', '3']},
+     np.arange(100).reshape((5, 20))[[4, 2, 0, 3, 1]]),
+
+    # Case: ROI id order does not match order of trace "roi_names" (variant 3)
+    ([{"id": 3}, {"id": 20}, {"id": 10}, {"id": 200}, {"id": 100}],
+     {"trace_data": np.arange(100).reshape((5, 20)),
+      "trace_names": ['100', '20', '10', '200', '3']},
+     np.arange(100).reshape((5, 20))[[4, 1, 2, 3, 0]]),
+
+], indirect=["trace_file_fixture"])
+def test_munge_traces(roi_data, trace_file_fixture, expected):
+    trace_file, fixture_params = trace_file_fixture
+    obt = _munge_traces(roi_data, trace_file,
+                        fixture_params['trace_data_key'],
+                        fixture_params['trace_names_key'],
+                        trace_sampling_rate=30,
+                        desired_trace_sampling_rate=30)
+    assert np.allclose(obt, expected)
+
+
+@pytest.mark.parametrize(
+    "data,input_fps,output_fps,expected",
+    [
+        (np.ones(10,), 10, 5, np.ones(5,)),
+        (np.ones(10,), 10, 3, np.ones(3,))
+    ]
+)
+def test_downsample(data, input_fps, output_fps, expected):
+    actual = downsample(data, input_fps, output_fps)
+    np.testing.assert_array_equal(expected, actual)
+
+
+def test_downsample_raises_error_greater_output_fps():
+    """Output FPS can't be greater than input FPS"""
+    with pytest.raises(
+            ValueError,
+            match=r'Output FPS can\'t be greater than input FPS'):
+        downsample(np.arange(10), 1, 5)

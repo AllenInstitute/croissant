@@ -1,20 +1,22 @@
 """Miscellaneous utility functions that don't quite belong elsewhere."""
-from typing import Any, Union, Generator, List
+import math
 from functools import reduce
+import inspect
+import io
+import json
 import operator
-import boto3
+import os.path
+from typing import Any, Union, Generator, List
 from urllib.parse import urlparse
+
+import boto3
+from botocore.exceptions import ClientError
+import h5py
 from pathlib import Path
 import jsonlines
-import json
-import inspect
-from botocore.exceptions import ClientError
 import numpy as np
-import h5py
-import math
 from scipy.signal import resample_poly
-import io
-import os.path
+
 
 from croissant.roi import LimsRoiSchema
 

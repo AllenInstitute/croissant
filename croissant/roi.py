@@ -102,14 +102,13 @@ class LimsRoiSchema(Schema):
         description=("Boolean indicating if the ROI is a valid "
                      "cell or not"))
     mask_matrix = fields.List(
-        fields.List(fields.Bool), 
+        fields.List(fields.Bool),
         required=True,
         description=("Bool nested list describing which pixels "
                      "in the ROI area are part of the cell"))
     max_correction_up = fields.Float(
         required=True,
-        description=("Max correction in pixels in the "
-                                           "up direction"))
+        description=("Max correction in pixels in the up direction"))
     max_correction_down = fields.Float(
         required=True,
         description=("Max correction in pixels in the "
@@ -120,8 +119,7 @@ class LimsRoiSchema(Schema):
                      "left direction"))
     max_correction_right = fields.Float(
         required=True,
-        description="Max correction in the pixels in "
-                                             "the right direction")
+        description="Max correction in the pixels in the right direction")
     mask_image_plane = fields.Int(
         required=True,
         description=("The old segmentation pipeline stored "
@@ -131,7 +129,7 @@ class LimsRoiSchema(Schema):
                      "always be set to zero for the new "
                      "updated pipeline"))
     exclusion_labels = fields.List(
-        fields.Str, 
+        fields.Str,
         required=True,
         description=("LIMS ExclusionLabel names used to "
                      "track why a given ROI is not "
