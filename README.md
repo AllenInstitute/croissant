@@ -102,6 +102,7 @@ INFO:root:Available experiments with s3 artifact stores:
 
 export MLFLOW_EXPERIMENT=example_aws_experiment
 ```
+The current production stack is named: `croissant-mlflow-prod-stack`
 
 The above are suggestions made by the helper. Taking the suggestions and executing these export statements makes running the online training tasks quite simple (though tedious arg-by-arg specification of all the resources is still possible):
 ```
@@ -111,6 +112,26 @@ python -m croissant.online_training \
   --training_args.test_data s3://prod.slapp.alleninstitute.org/merged_2line_2project/testing_data.json \
   --training_args.log_level INFO
 ```
+
+A json can also be used as input to the module to make the launch command easier. It can be helpful when
+specifying more complex configurations, such as a list of dropped columns or desired metrics. For example:
+
+```
+{
+  "training_args": {
+    "training_data": "s3://prod.slapp.alleninstitute.org/merged_2line_2project/training_data.json",
+    "test_data": "s3://prod.slapp.alleninstitute.org/merged_2line_2project/testing_data.json",
+    "log_level": "INFO",
+    "scorer": "roc_auc",
+    "reported_metrics": ["roc_auc", "average_precision", "recall", "precision", "accuracy"],
+    "drop_cols": ["full_genotype", "targeted_structure", "_feat_last_tenth_trace_skew", "_feat_simple_n_spikes",    "_feat_roi_data_skew", "_feat_roi_data_std"],
+    "seed": 42,
+    "refit": true,
+    "max_iter": 2000
+  }
+}
+```
+See `croissant.train.py` for a full description of the available training arguments.
 
 Once launched, these tasks can be tracked n the AWS console `ECS -> Cluster -> Tasks` where the cluster name is based on the cloudformation stack name. For example `mlflow-test-stack-fargate-cluster `. The logs of the job can be found from `Cloudwatch -> Logs -> LogGroups` and the log group will also be named based on the stack name, for example `mlflow-test-stack-ecs `.
 
