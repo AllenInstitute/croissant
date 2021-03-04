@@ -5,9 +5,7 @@ jobs:
       tag: "3.8"
     steps:
       - checkout
-      - python/load-cache
       - python/install-deps
-      - python/save-cache
       - run:
           command: |
             # pytest would be a dep in requirements.txt
