@@ -4,7 +4,7 @@ pandas>=1.0.0
 scikit-learn>=0.23.1
 numpy
 scipy
-argschema==2.0.1
+argschema==2.0.2
 setuptools
 mlflow==1.10.0
 tables
