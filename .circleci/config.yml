@@ -7,7 +7,7 @@ jobs:
       - checkout
       - run:
           command: |
-            pip install .
+            pip install .[ALL,TEST]
           name: Install
       - run:
           command: |

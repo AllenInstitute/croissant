@@ -9,7 +9,7 @@ RUN git clone https://github.com/AllenInstitute/croissant
 RUN cd croissant && \
     git checkout ${MYBRANCH} && \
     conda env create -f conda.yaml -n myenv && \
-    conda run -n myenv pip install .
+    conda run -n myenv pip install .[ALL,TEST]
 
 RUN conda clean -ayv && \
     find /opt/conda -follow -type f -regextype posix-extended -regex '.*\.(pyc)' -delete
